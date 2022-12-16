@@ -1,0 +1,26 @@
+{
+    "id": "8BD01CEC",
+    "path": "D:/R3/imesc/imesc3/R/app_server.R",
+    "project_path": "R/app_server.R",
+    "type": "r_source",
+    "hash": "703765349",
+    "contents": "",
+    "dirty": false,
+    "created": 1671186906964.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "7521,6",
+        "scrollLine": "7513"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1671187243,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1671187243448,
+    "read_only": false,
+    "read_only_alternatives": []
+}
