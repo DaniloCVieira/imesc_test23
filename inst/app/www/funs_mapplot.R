@@ -413,22 +413,23 @@ map_discrete_variable<-function(data,get,coords,base_shape=NULL,layer_shape=NULL
         if(isTRUE(scalesize_color))
         {  p <-  p+ geom_point( data=geopoint, aes(x=x, y=y, size=pop, col=pop), pch=symbol)
         if(!any(geopoint$pop<0)){
-          p<-p+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt), breaks=mybreaks,guide="none")
+          p<-p+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
         }
 
         } else if(isFALSE(scalesize_color)&is.null(colored_by_factor))
-        {   p <- p+geom_point( data=geopoint, aes(x=x, y=y, size=pop), pch=symbol,color=col_pts)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt), breaks=mybreaks)} else if(isFALSE(scalesize_color)&!is.null(colored_by_factor)){
-          p <- p+geom_point( data=geopoint_fac, aes(x=x, y=y, size=pop, col=fac), pch=symbol)+ scale_color_manual(name=leg,labels =  colorFAC$prev_fac,values =  colorFAC$col_pts,drop=F )+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt), breaks=mybreaks)
+        {   p <- p+geom_point( data=geopoint, aes(x=x, y=y, size=pop), pch=symbol,color=col_pts)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),breaks=mybreaks, limits =range(mybreaks))} else if(isFALSE(scalesize_color)&!is.null(colored_by_factor)){
+          p <- p+geom_point( data=geopoint_fac, aes(x=x, y=y, size=pop, col=fac), pch=symbol)+ scale_color_manual(name=leg,labels =  colorFAC$prev_fac,values =  colorFAC$col_pts,drop=F )+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),breaks=mybreaks, limits =range(mybreaks))
         }
 
       } else  if(isFALSE(scalesize_size))
       {
+
         if(isTRUE(scalesize_color)){
-          p<-  p+ geom_point( data=geopoint, aes(x=x, y=y,  col=pop), pch=symbol,size=cex.pt)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt), breaks=mybreaks,guide="none")} else if(isFALSE((scalesize_color))){
+          p<-  p+ geom_point( data=geopoint, aes(x=x, y=y,  col=pop), pch=symbol,size=cex.pt)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))} else if(isFALSE((scalesize_color))){
             if(!is.null(colored_by_factor)) {
-              p <- p+geom_point( data=geopoint_fac, aes(x=x, y=y, col=fac), pch=symbol,size=cex.pt)+ scale_color_manual(name=leg,labels =  colorFAC$prev_fac,values =  colorFAC$col_pts,drop=F)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt), breaks=mybreaks,guide="none")
+              p <- p+geom_point( data=geopoint_fac, aes(x=x, y=y, col=fac), pch=symbol,size=cex.pt)+ scale_color_manual(name=leg,labels =  colorFAC$prev_fac,values =  colorFAC$col_pts,drop=F)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
             } else {
-              p<-   p+geom_point( data=geopoint, aes(x=x, y=y), pch=symbol,size=cex.pt, color=col_pts[rownames(geopoint)])+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt), breaks=mybreaks,guide="none")
+              p<-   p+geom_point( data=geopoint, aes(x=x, y=y), pch=symbol,size=cex.pt, color=col_pts[rownames(geopoint)])+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
             }
           }
       }
@@ -440,10 +441,10 @@ map_discrete_variable<-function(data,get,coords,base_shape=NULL,layer_shape=NULL
       if(isTRUE(as_factor)){p<- p +   geom_point( data=geopoint, aes(x=x, y=y), pch=symbol, color=colhabs[as.factor(prev)]) }else{
         if(!any(geopoint$pop<0)){
           p<-p+
-            scale_radius(name=name.var, range=c(cexmin.pt,cex.pt), breaks=mybreaks,guide="none")
+            scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
         } else{
           p<-p+
-            scale_radius(name=name.var, breaks=mybreaks,guide="none")
+            scale_radius(name=name.var,guide="none",breaks=mybreaks, limits =range(mybreaks))
         }
          p<-p+
 

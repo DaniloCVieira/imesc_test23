@@ -1,7 +1,0 @@
-vals<-readRDS("savepoint.rds")
-
-
-sort(unlist(lapply(vals,function(x) object.size(x))))
-
-
-vals$rescompres<-NULL

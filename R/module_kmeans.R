@@ -3,30 +3,116 @@
 module_ui_kmeans <- function(id){
   ns<-NS(id)
   column(12,
-
+         inline( actionButton(ns("teste_comb"),"SAVE")),
          div(span(
-           inline(uiOutput(ns("choiceskmeans"))),
            inline(uiOutput(ns('kmeans_inputs')))
          )) ,
          uiOutput(ns('kmeans_out'))
   )
+
 }
 
 
 #' @export
 module_server_kmeans <- function (input, output, session,vals,df_colors,newcolhabs ){
   ns <- session$ns
+  ns_kmeans <- NS('kmeans')
 
+  symbols<-c("pch1","pch2","pch3","pch4",'pch5','pch6','pch7',"pch8")
+  df_symbol <- data.frame(val = c(16,15,17,18,8,1,5,3))
+  for(i in 1:length(symbols)) {
+    symbol1<-base64enc::dataURI(file = paste0('inst/app/www/pch',i,".png"), mime = "image/png")
+    df_symbol$img[i]<- sprintf(paste0(img(src = symbol1, width = '10')))}
+  observeEvent(input$teste_comb,{
+    savereac()
+  })
+
+  output$psom_side<-renderUI({
+    # req(input$model_or_data=="som codebook")
+    div(class="map_control_style",style="color: #05668D",
+        div(
+          # uiOutput(ns('psom_bgpalette')),
+          # uiOutput(ns("psom_display")),
+          # uiOutput(ns("psom_fac_control")),
+          # uiOutput(ns("psom_obscol")),
+          # uiOutput(ns("psom_bgalpha")),
+          # uiOutput(ns("psom_symbsize")),
+          # uiOutput(ns("psom_shape")),
+          # uiOutput(ns('psom_legcontrol')),
+          #  uiOutput(ns('psom_create_codeook'))
+        ))
+    tagList(module_ui_somplot(ns("kmeans")))
+  })
+
+  output$psom_out<-renderUI({
+    #req(input$model_or_data=="som codebook")
+    #plotOutput(ns("psom_code"))
+    #
+    req(!is.null(vals$k_means_results))
+    k_means_results<-vals$k_means_results
+
+    #saveRDS(vals$k_means_results,"k_means_results.rds")
+   # vals<-readRDS("savepoint_kmeans.rds")
+     #input<-readRDS("input_kmeans.rds")
+     #k_means_results<-readRDS("k_means_results.rds")
+
+    hc=as.factor(k_means_results[[1]])
+    callModule(module_server_somplot,
+               "kmeans",
+               vals=vals,
+               data_target=input$data_kmeans,
+               som_model=input$som_kmeans,
+               background_type="hc",
+               property=NULL,
+               hc=hc,
+               df_symbol=df_symbol
+    )
+
+    #vals<-readRDS('vals.rds')
+
+   # saveRDS(vals[[ns_kmeans("somplot_args")]],"somplot_args.rds")
+
+
+#vals$som_kmeans
+    #valsk$k_means_results[[1]]
+   # valsk$kmeans_result
+    renderPlot({
+      #vals<-readRDS("savepoint.rds")
+     # vals<-readRDS("savepoint_kmeans.rds")
+     # input<-readRDS("input_kmeans.rds")
+      args<-vals[[ns(ns_kmeans("somplot_args"))]]
+      req(length(args)>0)
+      vals$psom_plot<-do.call(bmu_plot,args)
+      vals$psom_plot
+
+
+    })
+
+
+
+
+  })
 
   output$choiceskmeans<-renderUI({
     validate(need(length(vals$saved_data)>0,"No Datalist found"))
-    span(
-      strong("Clustering target:"),
-      inline(radioButtons(ns("model_or_data"), NULL, choices  = choices_kmeans(), selected=c(choices_kmeans()[length(choices_kmeans())]),inline=T, width="200px"))
+    div(style="padding-left: 5px",
+        div("Clustering target:"),
+        radioButtons(ns("model_or_data"), NULL, choiceValues  = choices_kmeans(), choiceNames=choices_kmeans_names(),selected=c(choices_kmeans()[length(choices_kmeans())]))
 
     )
   })
+  choices_kmeans_names <- reactive({
+    req(input$data_kmeans)
+    a <- if (length(   names(vals$saved_data) > 0)) {
+      "Numeric-Attribute"
+    } else {
+      NULL
+    }
 
+    b <-    if(length(attr(vals$saved_data[[input$data_kmeans]],"som"))>0){"SOM-codebook"}else{NULL}
+    res <- c(a, b)
+    res
+  })
   choices_kmeans <- reactive({
     req(input$data_kmeans)
     a <- if (length(   names(vals$saved_data) > 0)) {
@@ -41,32 +127,62 @@ module_server_kmeans <- function (input, output, session,vals,df_colors,newcolha
   })
   output$kmeans_inputs<-renderUI({
     validate(need(length(vals$saved_data)>0,"No Datalist found"))
-    column(12,
-      class="well3",div(class="align_top2",
-                        div(style="vertical-align: text-top",
-                            inline(uiOutput(ns("data_kmeans"))),
-                            inline( uiOutput(ns("somkmeans"))),
-                            inline(uiOutput(ns("kmeans_centers"))),
+    column(12,class="well3",
+           div(
+             class="choosechannel",
+             div(
+               style="height: 85px;vertical-align: text-top; display: table",
+               inline(
+                 div(class="align_hc",
+                     inline(div(style="padding: 5px",strong("X:"))),
+                     inline(uiOutput(ns("data_kmeans"))))
+               ),
+               inline(
+                 div(class="align_hc",inline(uiOutput(ns("choiceskmeans"))))
+               ),
+               inline(
+                 div( class="align_hc",uiOutput(ns("somkmeans")))
+               ),
+               inline(
+                 div(class="align_hc",uiOutput(ns("kmeans_centers")))
+               ),
 
-                            inline(uiOutput(ns("oc_kmax"))),
-                            inline(uiOutput(ns("oc_boot"))),
+               inline(
+                 div(class="align_hc",uiOutput(ns("oc_kmax")))
+               ),
+               inline(
+                 div(class="align_hc",uiOutput(ns("oc_boot")))
+               ),
 
-                            inline(uiOutput(ns("kmeans_intermax"))),
-                            inline(uiOutput(ns("kmeans_nstarts"))),
-                            inline(uiOutput(ns("kmeans_alg"))),
-                            inline(numericInput(ns("kmeans_seed"),"Seed",value=NA,width="80px")),
-                            uiOutput(ns("kmeans_runs"))
+               inline(
+                 div(class="align_hc",uiOutput(ns("kmeans_intermax")))
+               ),
+               inline(
+                 div(class="align_hc",uiOutput(ns("kmeans_nstarts")))
+               ),
+               inline(
+                 div(class="align_hc",uiOutput(ns("kmeans_alg")))
+               ),
+               inline(
+                 div(class="align_hc",
+                     div("Seed"),
+                     numericInput(ns("kmeans_seed"),NULL,value=NA,width="80px"))
+               ),
+               uiOutput(ns("kmeans_runs"))
 
 
 
-                        )
-                        )
+
+             )
+
+           )
+
     )
   })
   output$kmeans_runs<-renderUI({
     switch (input$kmeans_tab,
-      'kmeans_tab1' =inline(actionButton(ns("kmeans_run"),"RUN")),
-      'kmeans_tab2' =div(inline(uiOutput(ns('kmeans_oclusters'))),inline(actionButton(ns("oc_run"),"RUN")))
+            'kmeans_tab1' =inline(actionButton(ns("kmeans_run"),"RUN")),
+            'kmeans_tab2' =div(inline(uiOutput(ns('kmeans_oclusters'))),inline(actionButton(ns("oc_run"),"RUN")))
 
     )
   })
@@ -94,7 +210,7 @@ module_server_kmeans <- function (input, output, session,vals,df_colors,newcolha
       sidebarLayout(
         sidebarPanel(
           div(class="map_control_style",style="color: #05668D",
-            uiOutput(ns("kmeans_tab2_side"))
+              uiOutput(ns("kmeans_tab2_side"))
           )
         ),
         mainPanel(uiOutput(ns("oc_plots")))
@@ -111,42 +227,50 @@ module_server_kmeans <- function (input, output, session,vals,df_colors,newcolha
       uiOutput(ns("oc_ss"))
     )
   })
-observeEvent(input$k.max,{
-  vals$k.max<-input$k.max
-})
-observeEvent(input$oc_boot,{
-  vals$oc_boot<-input$oc_boot
-})
+  observeEvent(input$k.max,{
+    vals$k.max<-input$k.max
+  })
+  observeEvent(input$oc_boot,{
+    vals$oc_boot<-input$oc_boot
+  })
 
 
-output$oc_boot<-renderUI({
-  if(is.null(vals$k.max)){vals$oc_boot<-50}
-  req(input$kmeans_oc)
-  req(input$kmeans_tab=='kmeans_tab2')
-  div(
-    inline(numericInput(ns("oc_boot"),"oc_boot",vals$oc_boot,step=1,width='100px')),
+  output$oc_boot<-renderUI({
+    if(is.null(vals$k.max)){vals$oc_boot<-50}
+    req(input$kmeans_oc)
+    req(input$kmeans_tab=='kmeans_tab2')
+    div(
+      div("oc_boot:"),
+      numericInput(ns("oc_boot"),NULL,vals$oc_boot,step=1,width='100px'),
 
-  )
-})
+    )
+  })
   output$oc_kmax<-renderUI({
     if(is.null(vals$k.max)){vals$k.max<-24}
     req(input$kmeans_oc)
     req(input$kmeans_tab=='kmeans_tab2')
     div(
-      inline(numericInput(ns("k.max"),"K.max",vals$k.max,step=1,width='100px')),
+      div("K.max:"),
+      numericInput(ns("k.max"),NULL,vals$k.max,step=1,width='100px'),
 
     )
   })
   observeEvent(input$oc_run,{
     req(input$kmeans_oc=='Elbow')
-      output$oc_elbow_out<-renderUI({
+    output$oc_elbow_out<-renderUI({
       req(input$k.max)
       renderPlot({
-        p<-fviz_nbclust(getdata_kmeans(), kmeans, method = "wss", k.max = input$k.max,iter.max = input$km_itermax, nstart = input$km_nstart,algorithm = input$km_alg) + theme_minimal() + ggtitle("the Elbow Method")
+        p<-fviz_nbclust(getdata_kmeans(), kmeans, method = "wss", k.max = input$k.max,iter.max = input$km_itermax, nstart = input$km_nstart,algorithm = km_alg()) + theme_minimal() + ggtitle("the Elbow Method")
         vals$kmeans_elbow<-p
         vals$kmeans_elbow
       })
     })
+  })
+
+  km_alg<-reactive({
+    km_alg<-input$km_alg
+    if(km_alg=="Forgy/Lloyd"){km_alg='Lloyd'}
+    km_alg
   })
 
   observeEvent(input$oc_run,{
@@ -154,7 +278,7 @@ output$oc_boot<-renderUI({
     output$oc_elbow_out<-renderUI({
       req(input$k.max)
       renderPlot({
-        p<-fviz_nbclust(getdata_kmeans(), kmeans, method = "silhouette", k.max = input$k.max,iter.max = input$km_itermax, nstart = input$km_nstart,algorithm = input$km_alg) + theme_minimal() + ggtitle("the Silhouette Method")
+        p<-fviz_nbclust(getdata_kmeans(), kmeans, method = "silhouette", k.max = input$k.max,iter.max = input$km_itermax, nstart = input$km_nstart,algorithm = km_alg()) + theme_minimal() + ggtitle("the Silhouette Method")
         vals$kmeans_elbow<-p
         vals$kmeans_elbow
       })
@@ -167,7 +291,7 @@ output$oc_boot<-renderUI({
     output$oc_elbow_out<-renderUI({
       req(input$k.max)
       renderPlot({
-        gap_stat <- suppressWarnings(clusGap(getdata_kmeans(), FUN = kmeans, K.max = input$k.max,iter.max = input$km_itermax, nstart = input$km_nstart,algorithm = input$km_alg, B = input$oc_boot,verbose=F))
+        gap_stat <- suppressWarnings(clusGap(getdata_kmeans(), FUN = kmeans, K.max = input$k.max,iter.max = input$km_itermax, nstart = input$km_nstart,algorithm = km_alg(), B = input$oc_boot,verbose=F))
         vals$gap_stat<-gap_stat
         p<-fviz_gap_stat(vals$gap_stat) + theme_minimal() + ggtitle("fviz_gap_stat: Gap Statistic")
         vals$kmeans_elbow<-p
@@ -214,7 +338,7 @@ output$oc_boot<-renderUI({
         uiOutput(ns("kmeans_down_plot")),
         uiOutput(ns("kmeans_down_model"))
 
-        ),
+      ),
       mainPanel(
         uiOutput(ns('pdata_out')),
         uiOutput(ns('psom_out')),
@@ -244,8 +368,8 @@ output$oc_boot<-renderUI({
   })
   observeEvent(input$downplot_kmeans,{
     vals$hand_plot<-switch(input$model_or_data,
-                             "data"="k-means (pca reprentation)",
-                             "som codebook"="k-means (codebook)")
+                           "data"="k-means (pca reprentation)",
+                           "som codebook"="k-means (codebook)")
     module_ui_figs("downfigs")
     mod_downcenter <- callModule(module_server_figs, "downfigs",  vals=vals)
   })
@@ -260,77 +384,76 @@ output$oc_boot<-renderUI({
   }
   ### psom module
 
-  output$psom_side<-renderUI({
-   # req(input$model_or_data=="som codebook")
-    div(class="map_control_style",style="color: #05668D",
-        div(
-          uiOutput(ns('psom_bgpalette')),
-          uiOutput(ns("psom_display")),
-          uiOutput(ns("psom_fac_control")),
-          uiOutput(ns("psom_obscol")),
-          uiOutput(ns("psom_bgalpha")),
-          uiOutput(ns("psom_symbsize")),
-          uiOutput(ns("psom_shape")),
-          uiOutput(ns('psom_legcontrol')),
-          uiOutput(ns('psom_create_codeook'))
-        ))
-  })
+
   output$psom_create_codeook<-renderUI({
     req(input$model_or_data=="som codebook")
     actionLink(ns('psom_create_codebook'),"+ Create Datalist with the Codebook and kmeans class")
   })
-  output$psom_out<-renderUI({
-    req(input$model_or_data=="som codebook")
-    plotOutput(ns("psom_code"))
-  })
+
   output$pdata_out<-renderUI({
     req(input$model_or_data=="data")
-    plotOutput(ns("pdata_plot"))
+    req(input$data_kmeans)
+    data<-vals$saved_data[[input$data_kmeans]]
+    if(ncol(data)==1){
+      plotOutput(ns("pdata_plot_box"))
+    } else{
+      plotOutput(ns("pdata_plot"))
+    }
+
+  })
+
+  output$pdata_plot_box<-  renderPlot({
+    data<-vals$saved_data[[input$data_kmeans]]
+    clu<-as.factor(vals$k_means_results$cluster)
+    pbox(data.frame(Cluster=clu,data), newcolhabs = vals$newcolhabs, palette = "turbo")
+    colors<-vals$newcolhabs[['turbo']] (nlevels(clu))[clu]
+    points(data.frame(Cluster=clu,data),col="black",bg=colors, pch=21)
+
   })
   output$pdata_plot<-renderPlot({
     req(!is.null(vals$k_means_results))
     #library("factoextra")
-  res.km<-vals$k_means_results
-  data<-vals$saved_data[[input$data_kmeans]]
-  psom_factors<-psom_factors()
-  psom_points<-psom_points()
-  pic<- which(unlist(lapply(data,var))==0)
-  if(length(pic)>0){
-    data<-data[,-pic]
-  }
-  res.pca<-prcomp(data,center=T)
-  cols<-getcolhabs(vals$newcolhabs, input$psom_facpalette, nrow(res.km$centers))
-  summ<-summary(res.pca)
-  lab<-paste0("(",round(summ$importance[,1:2][2,]*100,2),"%)")
-  xlab<-paste("Dim I",lab[1])
-  ylab<-paste("Dim II",lab[2])
-  # Coordinates of individuals
-  ind.coord <- as.data.frame(res.pca$x[,1:2])
-  # Add clusters obtained using the K-means algorithm
-  ind.coord$cluster <- factor(res.km$cluster)
-  colnames(ind.coord)<-c("Dim.1","Dim.2","cluster")
-  variance.percent <- round(summ$importance[,1:2][2,]*100,2)
-  shape<-if(is.null(input$psom_symbol)){16} else{as.numeric(input$psom_symbol)}
+    res.km<-vals$k_means_results
+    data<-vals$saved_data[[input$data_kmeans]]
+    psom_factors<-psom_factors()
+    psom_points<-psom_points()
+    pic<- which(unlist(lapply(data,var))==0)
+    if(length(pic)>0){
+      data<-data[,-pic]
+    }
+    res.pca<-prcomp(data,center=T)
+    cols<-getcolhabs(vals$newcolhabs, input$psom_facpalette, nrow(res.km$centers))
+    summ<-summary(res.pca)
+    lab<-paste0("(",round(summ$importance[,1:2][2,]*100,2),"%)")
+    xlab<-paste("Dim I",lab[1])
+    ylab<-paste("Dim II",lab[2])
+    # Coordinates of individuals
+    ind.coord <- as.data.frame(res.pca$x[,1:2])
+    # Add clusters obtained using the K-means algorithm
+    ind.coord$cluster <- factor(res.km$cluster)
+    colnames(ind.coord)<-c("Dim.1","Dim.2","cluster")
+    variance.percent <- round(summ$importance[,1:2][2,]*100,2)
+    shape<-if(is.null(input$psom_symbol)){16} else{as.numeric(input$psom_symbol)}
 
 
-  p<-ggscatter(
-    ind.coord, x = "Dim.1", y = "Dim.2",
-    color = "cluster", ellipse = TRUE, ellipse.type = "convex",
-    shape=shape,
-     size = input$psom_symbol_size,  legend = "right", ggtheme = theme_bw(base_size = input$psom_symbol_size+11),show.legend.text=F,
-    xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
-    ylab = paste0("Dim 2 (", variance.percent[2], "% )" ),
-    label=NULL, point=psom_points
-  )
+    p<-ggscatter(
+      ind.coord, x = "Dim.1", y = "Dim.2",
+      color = "cluster", ellipse = TRUE, ellipse.type = "convex",
+      shape=shape,
+      size = input$psom_symbol_size,  legend = "right", ggtheme = theme_bw(base_size = input$psom_symbol_size+11),show.legend.text=F,
+      xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+      ylab = paste0("Dim 2 (", variance.percent[2], "% )" ),
+      label=NULL, point=psom_points
+    )
 
-  if(input$dot_label_clus=='labels'){
-    p<-p  +geom_text( data=ind.coord, aes(x=Dim.1, y=Dim.2, label=psom_factors,),size=input$psom_symbol_size, color=cols[ind.coord$cluster])
+    if(input$dot_label_clus=='labels'){
+      p<-p  +geom_text( data=ind.coord, aes(x=Dim.1, y=Dim.2, label=psom_factors,),size=input$psom_symbol_size, color=cols[ind.coord$cluster])
 
-  }
-  vals$kmeans_plot_data<-p+scale_color_manual(values =  cols )
-  vals$kmeans_plot_data
+    }
+    vals$kmeans_plot_data<-p+scale_color_manual(values =  cols )
+    vals$kmeans_plot_data
 
-    })
+  })
 
 
   output$psom_bgpalette <- renderUI({
@@ -393,15 +516,7 @@ output$oc_boot<-renderUI({
     )
     vals$psom_plot<-recordPlot()
   })
-  symbols<-c("pch1","pch2","pch3","pch4",'pch5','pch6','pch7',"pch8")
-  df_symbol <- data.frame(
-    val = c(16,15,17,18,8,1,5,3)
-  )
-  for(i in 1:length(symbols))
-  {
-    symbol1<-base64enc::dataURI(file = paste0('inst/app/www/pch',i,".png"), mime = "image/png")
 
-    df_symbol$img[i]<- sprintf(paste0(img(src = symbol1, width = '10')))}
   output$psom_obscol<-renderUI({
     if(is.null(vals$psom_facpalette)){vals$psom_facpalette<-vals$colors_img$val[2]}
     div(span("+ Obs color",inline(
@@ -547,7 +662,7 @@ output$oc_boot<-renderUI({
 
 
 
-  observeEvent(list(input$data_kmeans,input$km_centers,input$km_itermax,input$km_nstart,input$input$km_alg,input$model_or_data, input$k.max),{
+  observeEvent(list(input$data_kmeans,input$km_centers,input$km_itermax,input$km_nstart,input$km_alg,input$model_or_data, input$k.max),{
     vals$kmeans_result<-NULL
     vals$k_means_results<-NULL
     vals$kmeans_elbow<-NULL
@@ -599,7 +714,7 @@ output$oc_boot<-renderUI({
       if (!is.na(input$kmeans_seed)) {set.seed(input$kmeans_seed)}
       centers<-input$km_centers
       data<-getdata_kmeans()
-      kmeans_result<-kmeans(data, centers, iter.max = input$km_itermax, nstart = input$km_nstart,algorithm = input$km_alg)
+      kmeans_result<-kmeans(data, centers, iter.max = input$km_itermax, nstart = input$km_nstart,algorithm = km_alg())
       vals$k_means_results<-kmeans_result
       #newclass<-m$unit.classif
       #for(i in 1:length(hcut)) {newclass[newclass==i]<-rep(hcut[i],sum(  newclass==i))}
@@ -627,9 +742,14 @@ output$oc_boot<-renderUI({
   observeEvent(input$kmeans_alg,{ vals$kmeans_alg<-input$kmeans_alg})
   output$kmeans_alg<-renderUI({
     req(input$model_or_data)
-    pickerInput(ns('km_alg'),'algorithm',c("Hartigan-Wong", "Forgy",
-                                           "MacQueen"), width="150px", selected=vals$km_alg)
+    div(
+      div('Algorithm:'),
+      div(pickerInput(ns('km_alg'),NULL,c("Hartigan-Wong", "Forgy/Lloyd",
+                                          "MacQueen"), width="150px", selected=vals$km_alg))
+    )
   })
+
+
 
   observeEvent(input$km_nstarts,{ vals$km_nstarts<-input$km_nstarts})
   output$kmeans_nstarts<-renderUI({
@@ -637,14 +757,20 @@ output$oc_boot<-renderUI({
     if(is.null(vals$km_nstart)){vals$km_nstart<-1}
     km_centers<-input$km_centers
     req(length(km_centers)==1)
-    numericInput(ns('km_nstart'),span("nstart",tiphelp("if centers is a number, how many random sets should be chosen?")), width="120px", value=vals$km_nstart, step=1)
+    div(
+      div(span("nstart",tiphelp("if centers is a number, how many random sets should be chosen?"))),
+      numericInput(ns('km_nstart'),NULL, width="120px", value=vals$km_nstart, step=1)
+    )
   })
 
   observeEvent(input$km_itermax,{ vals$km_itermax<-input$km_itermax})
   output$kmeans_intermax<-renderUI({
     req(input$model_or_data)
     if(is.null(vals$km_itermax)){vals$km_itermax<-10}
-    numericInput(ns('km_itermax'),span("iter.max",tiphelp("the maximum number of iterations allowed")), width="120px", value=vals$km_itermax,step=1)
+    div(
+      div(span("iter.max",tiphelp("the maximum number of iterations allowed"))),
+      numericInput(ns('km_itermax'),NULL, width="120px", value=vals$km_itermax,step=1)
+    )
   })
 
   observeEvent(input$km_centers,{ vals$km_centers<-input$km_centers})
@@ -657,18 +783,24 @@ output$oc_boot<-renderUI({
   })
 
   output$kmeans_centers<-renderUI({
-   # req(input$kmeans_tab=='kmeans_tab1')
+    # req(input$kmeans_tab=='kmeans_tab1')
     req(input$model_or_data)
     if(is.null(vals$km_centers)){vals$km_centers<-5}
-    numericInput(ns('km_centers'),span("centers",tiphelp("the number of clusters: a random set of (distinct) rows in data is chosen as the initial centres")), width="100px", value=vals$km_centers, step=1)
+    div(
+      div(span("centers",tiphelp("the number of clusters: a random set of (distinct) rows in data is chosen as the initial centres"))),
+      numericInput(ns('km_centers'),NULL, width="100px", value=vals$km_centers, step=1)
+    )
   })
   observeEvent(input$data_kmeans,{ vals$cur_data<-input$data_kmeans})
   output$data_kmeans<-renderUI({
     tags$div(style="margin: 0px; padding: 0px",
-             pickerInput(ns("data_kmeans"),
-                         "Datalist:",
-                         choices =    names(vals$saved_data),
-                         width="250px", selected=vals$cur_data)
+             div("Training Datalist:"),
+             div(
+               pickerInput(ns("data_kmeans"),
+                           NULL,
+                           choices =    names(vals$saved_data),
+                           width="250px", selected=vals$cur_data)
+             )
     )
   })
   observeEvent(input$som_kmeans,{ vals$som_kmeans<-input$som_kmeans})
@@ -677,8 +809,9 @@ output$oc_boot<-renderUI({
     req(input$model_or_data)
     req(input$model_or_data=='som codebook')
     data=vals$saved_data[[input$data_kmeans]]
-    pickerInput(ns("som_kmeans"),"Som codebook:",choices = names(attr(data,"som")),selected=vals$som_kmeans,
-                width="150px")
+    div(div("Som codebook:"),
+        div(pickerInput(ns("som_kmeans"),NULL,choices = names(attr(data,"som")),selected=vals$som_kmeans,
+                        width="150px")))
   })
 
 
@@ -693,7 +826,7 @@ output$oc_boot<-renderUI({
       m<-attr(data,"som")[[input$som_kmeans]]
       codes<-getCodes(m)
       codes
-      }
+    }
     res
 
   })
@@ -707,7 +840,7 @@ output$oc_boot<-renderUI({
       for(i in 1:length(fac)) {newclass[newclass==i]<-rep(fac[i],sum(  newclass==i))}
       names(newclass)<-rownames(data)
       temp<-newclass
-      }
+    }
     if(input$hand_save=="create"){
       attr(vals$saved_data[[input$data_kmeans]],"factors")[input$newdatalist]<-as.factor(temp)
     } else{
@@ -766,8 +899,8 @@ output$oc_boot<-renderUI({
     choices<-c(names(vals$saved_data))
     req(input$hand_save=="over")
     choices=switch (vals$hand_save,
-            'Save K-means Clusters' = colnames(attr(vals$saved_data[[input$data_kmeans]],'factors')),
-            "create_codebook_kmeans"=names(vals$saved_data)
+                    'Save K-means Clusters' = colnames(attr(vals$saved_data[[input$data_kmeans]],'factors')),
+                    "create_codebook_kmeans"=names(vals$saved_data)
     )
 
 
@@ -833,5 +966,21 @@ output$oc_boot<-renderUI({
   output$save_confirm<-renderUI({
     req(isTRUE(data_store$df)|isTRUE(data_overwritte$df))
     actionButton(ns("data_confirm"),strong("confirm"))
+  })
+
+  savereac<-reactive({
+
+    tosave<-isolate(reactiveValuesToList(vals))
+    tosave<-tosave[-which(names(vals)%in%c("saved_data","newcolhabs",'colors_img'))]
+    tosave<-tosave[-which(unlist(lapply(tosave,function(x) object.size(x)))>1000)]
+    tosave$saved_data<-vals$saved_data
+    tosave$newcolhabs<-vals$newcolhabs
+    tosave$colors_img<-vals$colors_img
+    saveRDS(tosave,"savepoint_kmeans.rds")
+    saveRDS(reactiveValuesToList(input),"input_kmeans.rds")
+
+    #vals<-readRDS("vals.rds")
+    #input<-readRDS('input.rds')
+
   })
 }

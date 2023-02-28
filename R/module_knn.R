@@ -556,7 +556,7 @@ module_server_knn <- function (input, output, session,vals,df_colors,newcolhabs 
              if(input$knn_tab=="knn_tab1"){
                div(
                  div(class='well3',
-                     strong("Type:"),inline(radioButtons(ns('knn_type'),NULL,choices=c("Classification","Regresion"),inline =T, selected=vals$cur_knn_type))
+                     strong("Type:"),inline(radioButtons(ns('knn_type'),NULL,choices=c("Classification","Regression"),inline =T, selected=vals$cur_knn_type))
                  ),
                  div(class="well3",
                      span(strong("X:"),
@@ -707,8 +707,192 @@ module_server_knn <- function (input, output, session,vals,df_colors,newcolhabs 
            column(12, align = "center",
                   popify(actionButton(ns("trainknn"), h4(img(src=knn_icon,height='20',width='20'),"train KNN",icon("fas fa-arrow-circle-right")), style = "background:  #05668D; color: white"),NULL,"Click to run")
            ),
+           column(12,align="right",
+                  div(style="white-space: normal;max-width: 150px",
+                      actionLink(ns("gotrain_loop"),"+ Train all variables in Datalist Y")
+                  )
+           )
 
     )
+  })
+  observeEvent(input$gotrain_loop,{
+    showModal(
+      modalDialog(
+        title=div("Train models using variables in",input$data_knnY),
+        easyClose=T,
+
+        div(
+          column(12,
+                 "This action will train",strong(ncol(getyloop()), style="color: red")," models, using the columns of Datalist: ",strong(input$data_knnY),"as Y. The given name of the models will be (",input$data_knnY,"::Y~Datalist_X), and any model already saved with this name(s) will be replaced.",em("We suggest using this tool from a Datalist without any saved knn model", style="color: red")),
+          column(12,
+                 div(strong("Click to proceed:")),
+                 actionButton(ns("train_loop"),"Train_loop_YDatalist"))
+        )
+      )
+    )
+
+  })
+
+  observeEvent(input$train_loop,{
+    removeModal()
+    trainknn_loop()
+  })
+
+  getyloop<-reactive({
+    #saveRDS(reactiveValuesToList(input),"input.rds")
+    #saveRDS(reactiveValuesToList(vals),"vals.rds")
+    #input<-readRDS("input.rds")
+    #vals<-readRDS("vals.rds")
+    y<-vals$saved_data[[input$data_knnY]]
+    if(input$knn_type== 'Classification'){y<-attr(y,"factors")}
+    if(input$knn_test_partition!="None"){
+      if(input$knn_type== 'Classification'){
+        pic<-which(colnames(y)==input$knn_test_partition)
+        if(length(pic)>0){
+          y<-y[,-pic, drop=F]}
+      }
+    }
+    y_loop<-y
+    y_loop
+  })
+
+  trainknn_loop<-reactive({
+    #saveRDS(reactiveValuesToList(vals),"vals.rds")
+    #saveRDS(reactiveValuesToList(input),"input.rds")
+    #vals<-readRDS("vals.rds")
+    #input<-readRDS("input.rds")
+    y_loop<-getyloop()
+    withProgress(message="Running",max=ncol(y_loop),{
+      i=1
+      for(i in 1:ncol(y_loop)) {
+        t<-try({
+          data<-getdata_knnX()
+          x<-x_o<-data.frame(data)
+          y<-y_o<-y_loop[,i]
+
+          output$knn_war<-renderUI({
+            column(12,style="color: red",align="center",
+                   if(anyNA(x)){"Error: Missing values are not allowed in X"} else{NULL},
+                   if(anyNA(y)){"Error: Missing values are not allowed in Y"} else{NULL}
+            )
+          })
+          validate(need(anyNA(x)==F,"NAs not allowed in X"))
+          validate(need(anyNA(y)==F,"NAs not allowed in Y"))
+          req(input$knn_test_partition)
+          if(input$knn_test_partition!="None"){
+            parts<-get_parts_knn()
+            train<-parts$train
+            test<-parts$test
+            x<-data.frame(getdata_knnX()[train,])
+            y<-y_o[train]
+          }
+          #readrd(y,"y.rds")
+          #saveRDS(x,"x.rds")
+          #saveRDS(reactiveValuesToList(input),"input.rds")
+          #y<-readRDS("y.rds")
+          #x<-readRDS("x.rds")
+          #input<-readRDS("input.rds")
+
+          seed<-if (!is.na(input$seedknn)) { input$seedknn} else{
+            NULL
+          }
+          knn_search<-input$knn_search
+
+          colnames(x)<-gsub(" ",".", colnames(x))
+          if (!is.na(input$seedknn)) {set.seed(input$seedknn)}
+
+
+          knn<-train(x,y,'knn',
+
+                     trControl=trainControl(
+
+                       method = input$knn_res_method,
+                       number = input$cvknn,
+                       repeats = input$repeatsknn,
+                       p=input$pleaveknn/100,
+                       savePredictions = "all",
+                       search=input$knn_search
+
+
+                     ),
+                     tuneLength=input$knn_tuneLength
+          )
+          attr(knn,"test_partition")<-paste("Test data:",input$knn_test_partition,"::",input$testdata_knn)
+          attr(knn,"Y")<-paste(input$data_knnY,"::",colnames(y_loop)[i])
+          attr(knn,"Datalist")<-paste(input$data_knnX)
+
+          vals$knn_unsaved<-knn
+
+          if(input$knn_test_partition!="None"){
+            attr(vals$knn_unsaved,'test')<-x_o[test,]
+            attr(vals$knn_unsaved,"sup_test")<-y_o[test]
+          } else{ attr(vals$knn_unsaved,'test')<-c("None")}
+          vals$bag_knn<-T
+          attr(vals$knn_unsaved,"supervisor")<-colnames(y_loop)[i]
+          attr(vals$knn_unsaved,"inputs")<-list(
+            Ydatalist=input$data_knnY,
+            Y=colnames(y_loop)[i],
+            Xdatalist=input$data_knnX
+          )
+
+          attr( vals$knn_unsaved,"Y")<-paste0(input$data_knnY,"::",colnames(y_loop)[i])
+          saveknn_loop()
+          beep(10)
+          #saveRDS(vals$nb_unsaved,"nb.rds")
+        })
+
+
+
+        if("try-error" %in% class(t)){
+          output$knn_war<-renderUI({
+            column(12,em(style="color: gray",
+                         "Error in training the knn model. Check if the number of observations in X and Y are compatible"
+            ))
+          })
+
+        } else{
+          output$knn_war<-NULL
+        }
+        incProgress(1)
+      }
+      updateTabsetPanel(session,"knn_tab","knn_tab2")
+    })
+
+  })
+
+
+  saveknn_loop<-reactive({
+    temp<-vals$knn_unsaved
+    name_model<-paste0(attr(temp,"Y"),"~",input$data_knnX, "(",input$knn_method,")")
+    temp<-list(temp)
+    names(temp)<-name_model
+    attr(vals$saved_data[[input$data_knnX]],"knn")[[name_model]]<-temp
+    cur<-name_model
+    attr(vals$saved_data[[input$data_knnX]],"knn")['new knn (unsaved)']<-NULL
+    vals$bag_knn<-F
+    vals$cur_knn_models<-cur
+    vals$cur_knn<-cur
+    vals$knn_unsaved<-NULL
+  })
+  saveknn<-reactive({
+    req(vals$cur_knn_models=='new knn (unsaved)')
+    temp<-vals$knn_results
+    if(input$hand_save=="create"){
+      temp<-list(temp)
+      names(temp)<-input$newdatalist
+      attr(vals$saved_data[[input$data_knnX]],"knn")[[input$newdatalist]]<-temp
+      cur<-input$newdatalist
+    } else{
+      temp<-list(temp)
+      names(temp)<-input$over_datalist
+      attr(vals$saved_data[[input$data_knnX]],"knn")[[input$over_datalist]]<-temp
+      cur<-input$over_datalist
+    }
+    attr(vals$saved_data[[input$data_knnX]],"knn")['new knn (unsaved)']<-NULL
+    vals$bag_knn<-F
+    vals$cur_knn_models<-cur
+    vals$cur_knn<-cur
+
   })
 
   output$knn_search_length<-renderUI({
@@ -904,7 +1088,7 @@ module_server_knn <- function (input, output, session,vals,df_colors,newcolhabs 
   })
 
   output$varimp_gg<-renderUI({
-    req(input$varimp_type=='gg')
+    #req(input$varimp_type=='gg')
     div(class="palette",
         div(
           span("+ Palette:",
@@ -1515,26 +1699,7 @@ module_server_knn <- function (input, output, session,vals,df_colors,newcolhabs 
       "Create Datalist: knn predictions"={ name_knn_pred()},
       "resample_create"={name_resample_create()}
     )})
-  saveknn<-reactive({
-    req(vals$cur_knn_models=='new knn (unsaved)')
-    temp<-vals$knn_results
-    if(input$hand_save=="create"){
-      temp<-list(temp)
-      names(temp)<-input$newdatalist
-      attr(vals$saved_data[[input$data_knnX]],"knn")[[input$newdatalist]]<-c(temp,attr(vals$saved_data[[input$data_knnX]],"knn")[[input$newdatalist]])
-      cur<-input$newdatalist
-    } else{
-      temp<-list(temp)
-      names(temp)<-input$knn_over
-      attr(vals$saved_data[[input$data_knnX]],"knn")[input$knn_over]<-temp
-      cur<-input$knn_over
-    }
-    attr(vals$saved_data[[input$data_knnX]],"knn")['new knn (unsaved)']<-NULL
-    vals$bag_knn<-F
-    vals$cur_knn_models<-cur
-    vals$cur_knn<-cur
 
-  })
   knn_create_training_errors<-reactive({
     temp<-vals$knn_down_errors_train
     temp<-data_migrate(vals$saved_data[[input$data_knnX]],temp,"newdatalist")

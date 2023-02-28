@@ -557,7 +557,7 @@ module_server_sgboost <- function (input, output, session,vals,df_colors,newcolh
         if(input$sgboost_tab=="sgboost_tab1"){
           div(
             div(class='well3',
-                strong("Type:"),inline(radioButtons(ns('sgboost_type'),NULL,choices=c("Classification","Regresion"),inline =T, selected=vals$cur_sgboost_type))
+                strong("Type:"),inline(radioButtons(ns('sgboost_type'),NULL,choices=c("Classification","Regression"),inline =T, selected=vals$cur_sgboost_type))
             ),
             div(class="well3",
                 span(strong("X:"),
@@ -723,11 +723,196 @@ module_server_sgboost <- function (input, output, session,vals,df_colors,newcolh
 
            column(12, align = "center",
                   popify(actionButton(ns("trainsgboost"), h4(img(src=sgboost_icon,height='20',width='20'),"train Stochastic Gradient Boosting",icon("fas fa-arrow-circle-right")), style = "background:  #05668D; color: white"),NULL,"Click to run")
+           ),
+           column(12,align="right",
+                  div(style="white-space: normal;max-width: 150px",
+                      actionLink(ns("gotrain_loop"),"+ Train all variables in Datalist Y")
+                  )
            )
 
 
     )
   })
+  observeEvent(input$gotrain_loop,{
+    showModal(
+      modalDialog(
+        title=div("Train models using variables in",input$data_sgboostY),
+        easyClose=T,
+
+        div(
+          column(12,
+                 "This action will train",strong(ncol(getyloop()), style="color: red")," models, using the columns of Datalist: ",strong(input$data_sgboostY),"as Y. The given name of the models will be (",input$data_sgboostY,"::Y~Datalist_X), and any model already saved with this name(s) will be replaced.",em("We suggest using this tool from a Datalist without any saved sgboost model", style="color: red")),
+          column(12,
+                 div(strong("Click to proceed:")),
+                 actionButton(ns("train_loop"),"Train_loop_YDatalist"))
+        )
+      )
+    )
+
+  })
+
+  observeEvent(input$train_loop,{
+    removeModal()
+    trainsgboost_loop()
+  })
+
+  getyloop<-reactive({
+    #saveRDS(reactiveValuesToList(input),"input.rds")
+    #saveRDS(reactiveValuesToList(vals),"vals.rds")
+    #input<-readRDS("input.rds")
+    #vals<-readRDS("vals.rds")
+    y<-vals$saved_data[[input$data_sgboostY]]
+    if(input$sgboost_type== 'Classification'){y<-attr(y,"factors")}
+    if(input$sgboost_test_partition!="None"){
+      if(input$sgboost_type== 'Classification'){
+        pic<-which(colnames(y)==input$sgboost_test_partition)
+        if(length(pic)>0){
+          y<-y[,-pic, drop=F]}
+      }
+    }
+    y_loop<-y
+    y_loop
+  })
+
+  trainsgboost_loop<-reactive({
+    #saveRDS(reactiveValuesToList(vals),"vals.rds")
+    #saveRDS(reactiveValuesToList(input),"input.rds")
+    #vals<-readRDS("vals.rds")
+    #input<-readRDS("input.rds")
+    y_loop<-getyloop()
+    withProgress(message="Running",max=ncol(y_loop),{
+      i=1
+      for(i in 1:ncol(y_loop)) {
+        t<-try({
+          data<-getdata_sgboostX()
+          x<-x_o<-data.frame(data)
+          y<-y_o<-y_loop[,i]
+
+          output$sgboost_war<-renderUI({
+            column(12,style="color: red",align="center",
+                   if(anyNA(x)){"Error: Missing values are not allowed in X"} else{NULL},
+                   if(anyNA(y)){"Error: Missing values are not allowed in Y"} else{NULL}
+            )
+          })
+          validate(need(anyNA(x)==F,"NAs not allowed in X"))
+          validate(need(anyNA(y)==F,"NAs not allowed in Y"))
+          req(input$sgboost_test_partition)
+          if(input$sgboost_test_partition!="None"){
+            parts<-get_parts_sgboost()
+            train<-parts$train
+            test<-parts$test
+            x<-data.frame(getdata_sgboostX()[train,])
+            y<-y_o[train]
+          }
+          seed<-if (!is.na(input$seedsgboost)) { input$seedsgboost} else{
+            NULL
+          }
+          interaction.depth=as.numeric(unlist(strsplit(input$interaction.depth,",")))
+          n.trees=as.numeric(unlist(strsplit(input$n.trees,",")))
+          shrinkage=as.numeric(unlist(strsplit(input$shrinkage,",")))
+          n.minobsinnode=as.numeric(unlist(strsplit(input$n.minobsinnode,",")))
+
+          grid<-expand.grid(interaction.depth=interaction.depth,
+                            n.trees = n.trees,
+                            shrinkage=shrinkage,
+                            n.minobsinnode=n.minobsinnode)
+
+          colnames(x)<-gsub(" ",".", colnames(x))
+          if (!is.na(input$seedsgboost)) {set.seed(input$seedsgboost)}
+
+          sgboost<-train(x,y,'gbm',
+                         trControl=trainControl(
+                           method = input$sgboost_res_method,## resampling method
+                           number = input$cvsgboost,
+                           repeats = input$repeatssgboost,
+                           p=input$pleavesgboost/100,
+                           savePredictions = "all"
+                         ),
+                         tuneGrid=grid,
+
+          )
+          attr(sgboost,"test_partition")<-paste("Test data:",input$sgboost_test_partition,"::",input$testdata_sgboost)
+          attr(sgboost,"Y")<-paste(input$data_sgboostY,"::",colnames(y_loop)[i])
+          attr(sgboost,"Datalist")<-paste(input$data_sgboostX)
+
+          vals$sgboost_unsaved<-sgboost
+
+          if(input$sgboost_test_partition!="None"){
+            attr(vals$sgboost_unsaved,'test')<-x_o[test,]
+            attr(vals$sgboost_unsaved,"sup_test")<-y_o[test]
+          } else{ attr(vals$sgboost_unsaved,'test')<-c("None")}
+          vals$bag_sgboost<-T
+          attr(vals$sgboost_unsaved,"supervisor")<-colnames(y_loop)[i]
+          attr(vals$sgboost_unsaved,"inputs")<-list(
+            Ydatalist=input$data_sgboostY,
+            Y=colnames(y_loop)[i],
+            Xdatalist=input$data_sgboostX
+          )
+
+          attr(vals$sgboost_unsaved,"Y")<-paste0(input$data_sgboostY,"::",colnames(y_loop)[i])
+          savesgboost_loop()
+          beep(10)
+          #saveRDS(vals$nb_unsaved,"nb.rds")
+        })
+
+
+
+        if("try-error" %in% class(t)){
+          output$sgboost_war<-renderUI({
+            column(12,em(style="color: gray",
+                         "Error in training the sgboost model. Check if the number of observations in X and Y are compatible"
+            ))
+          })
+
+        } else{
+          output$sgboost_war<-NULL
+        }
+        incProgress(1)
+      }
+      updateTabsetPanel(session,"sgboost_tab","sgboost_tab2")
+    })
+
+  })
+
+
+
+
+
+  savesgboost_loop<-reactive({
+    temp<-vals$sgboost_unsaved
+    name_model<-paste0(attr(temp,"Y"),"~",input$data_sgboostX)
+    temp<-list(temp)
+    names(temp)<-name_model
+    attr(vals$saved_data[[input$data_sgboostX]],"sgboost")[[name_model]]<-temp
+    cur<-name_model
+    attr(vals$saved_data[[input$data_sgboostX]],"sgboost")['new sgboost (unsaved)']<-NULL
+    vals$bag_sgboost<-F
+    vals$cur_sgboost_models<-cur
+    vals$cur_sgboost<-cur
+    vals$sgboost_unsaved<-NULL
+  })
+
+  savesgboost<-reactive({
+    req(vals$cur_sgboost_models=='new sgboost (unsaved)')
+    temp<-vals$sgboost_results
+    if(input$hand_save=="create"){
+      temp<-list(temp)
+      names(temp)<-input$newdatalist
+      attr(vals$saved_data[[input$data_sgboostX]],"sgboost")[[input$newdatalist]]<-temp
+      cur<-input$newdatalist
+    } else{
+      temp<-list(temp)
+      names(temp)<-input$over_datalist
+      attr(vals$saved_data[[input$data_sgboostX]],"sgboost")[[input$over_datalist]]<-temp
+      cur<-input$over_datalist
+    }
+    attr(vals$saved_data[[input$data_sgboostX]],"sgboost")['new sgboost (unsaved)']<-NULL
+    vals$bag_sgboost<-F
+    vals$cur_sgboost_models<-cur
+    vals$cur_sgboost<-cur
+
+  })
+
 
   output$sgboost_resampling<-renderUI({
     div(
@@ -908,7 +1093,7 @@ module_server_sgboost <- function (input, output, session,vals,df_colors,newcolh
   })
 
   output$varimp_gg<-renderUI({
-    req(input$varimp_type=='gg')
+   # req(input$varimp_type=='gg')
     div(class="palette",
         div(
           span("+ Palette:",
@@ -1497,26 +1682,7 @@ module_server_sgboost <- function (input, output, session,vals,df_colors,newcolh
       "Create Datalist: sgboost predictions"={ name_sgboost_pred()},
       "resample_create"={name_resample_create()}
     )})
-  savesgboost<-reactive({
-    req(vals$cur_sgboost_models=='new sgboost (unsaved)')
-    temp<-vals$sgboost_results
-    if(input$hand_save=="create"){
-      temp<-list(temp)
-      names(temp)<-input$newdatalist
-      attr(vals$saved_data[[input$data_sgboostX]],"sgboost")[[input$newdatalist]]<-c(temp,attr(vals$saved_data[[input$data_sgboostX]],"sgboost")[[input$newdatalist]])
-      cur<-input$newdatalist
-    } else{
-      temp<-list(temp)
-      names(temp)<-input$sgboost_over
-      attr(vals$saved_data[[input$data_sgboostX]],"sgboost")[input$sgboost_over]<-temp
-      cur<-input$sgboost_over
-    }
-    attr(vals$saved_data[[input$data_sgboostX]],"sgboost")['new sgboost (unsaved)']<-NULL
-    vals$bag_sgboost<-F
-    vals$cur_sgboost_models<-cur
-    vals$cur_sgboost<-cur
 
-  })
   sgboost_create_training_errors<-reactive({
     temp<-vals$sgboost_down_errors_train
     temp<-data_migrate(vals$saved_data[[input$data_sgboostX]],temp,"newdatalist")

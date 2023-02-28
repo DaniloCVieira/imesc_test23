@@ -1,3 +1,1590 @@
+mergedatacol<-function(datalist,rm_dup=T){
+  {
+
+    to_merge<-datalist
+
+    to_merge_fac<-lapply(datalist,function(x) attr(x,"factors"))
+    mx <- which.max(do.call(c,lapply(to_merge,nrow)))
+    newmerge<-data.frame(id=rownames(to_merge[[mx]]))
+    rownames(newmerge)<-newmerge$id
+    l1<-unlist(lapply(to_merge,function(x){
+      x[rownames(newmerge),, drop=F]
+    }),
+    recursive = F)
+    newdata<-data.frame(l1)
+
+    rownames(newdata)<-rownames(to_merge[[mx]])
+    colnames(newdata)<-c(do.call(c,lapply(to_merge,colnames)))
+
+    if(isTRUE(rm_dup)) {
+      if(any(duplicated(colnames(newdata)))){
+        dup<-which(duplicated(colnames(newdata)))
+        keep<-which.max(do.call(c,lapply(lapply(newdata[dup],na.omit),length)))
+        fall<-dup[-keep]
+        newdata<-newdata[colnames(newdata)[-fall]]
+      }
+    }
+
+
+
+    mxfac <- which.max(do.call(c,lapply(to_merge_fac,nrow)))
+    newmerge_fac<-data.frame(id=rownames(to_merge_fac[[mxfac]]))
+    rownames(newmerge_fac)<-newmerge_fac$id
+    l2<-unlist(lapply(to_merge_fac,function(x){
+      x[rownames(newmerge_fac),, drop=F]
+    }),
+    recursive = F)
+    newfac<-data.frame(l2)
+
+    rownames(newfac)<-rownames(to_merge_fac[[mx]])
+    colnames(newfac)<-c(do.call(c,lapply(to_merge_fac,colnames)))
+    if(isTRUE(rm_dup)){
+      if(any(duplicated(colnames(newfac)))){
+        dup<-which(duplicated(colnames(newfac)))
+        keep<-which.max(do.call(c,lapply(lapply(newfac[dup],na.omit),length)))
+        fall<-dup[-keep]
+        newfac<-newfac[colnames(newfac)[-fall]]
+      }
+    }
+
+    newdata<-data_migrate(to_merge[[mx]],newdata,"")
+    attr(newdata, "transf")=NULL
+    attr(newdata,"factors")<-newfac[rownames(newdata),]
+    newdata
+  }
+}
+getcol_missing<-function(data){
+  res0<-res<-which(is.na(data), arr.ind=TRUE)
+
+  for(i in 1:nrow(res)){
+    res0[i,1]<-rownames(data)[res[i,1]]
+    res0[i,2]<-colnames(data)[res[i,2]]
+  }
+  colnames(res0)<-c("ID","Variable")
+  rownames(res0)<-NULL
+  res<-data.frame( table(res0[,2]))
+  colnames(res)<-c("Variable","Missing")
+  rownames(res)<-res[,1]
+  res
+}
+
+
+getrow_missing<-function(data){
+  res0<-res<-which(is.na(data), arr.ind=TRUE)
+
+  for(i in 1:ncol(res)){
+    res0[i,1]<-rownames(data)[res[i,1]]
+    res0[i,2]<-colnames(data)[res[i,2]]
+  }
+  colnames(res0)<-c("ID","Variable")
+
+  res<-data.frame( table(rownames(res0)))
+  colnames(res)<-c("Variable","Missing")
+  rownames(res)<-res[,1]
+  res
+}
+
+
+
+getroot_old<-function(newdata,obc,reps,modelist,weis,accu, scale,method,top.features, root=NULL, inter_method,progress=T, ms=NULL,type="modelist"){
+
+  m<-modelist[[1]]
+  score<-ifelse(m$modelType=="Classification","Accuracy",'Rsquared')
+  message<-if(inter_method=="Paired"){
+    "Calculating Root..."
+  } else{
+    "Calculating score loss..."
+  }
+
+
+  tops<-gettop(modelist,scale,method,weis,top.features)
+  if(!is.null(root)){
+    pic<- which(colnames(newdata)%in%root)
+  }else {
+    pic<-which(colnames(newdata)%in%tops)}
+  cols_run<-colnames(newdata)[pic]
+  if(isTRUE(progress)){
+    session=getDefaultReactiveDomain()
+  } else{
+    session<-MockShinySession$new()
+  }
+  nmax<-reps*length(cols_run)
+  withProgress(min=0, max=nmax,message=message,session=session,{
+    performaces0<-lapply(1:reps, function(j){
+      testes<-list()
+      for(i in 1:length(cols_run)) {
+        temp<-newdata
+        cols<-as.character(cols_run[i])
+        temp[,cols]<-sample(newdata[,cols])
+        pred<-if(type=="modelist"){
+          getpreds(modelist,temp,weis)
+        }else{predict(ms,temp)}
+
+        res<-postResample(pred,obc)
+        testes[[i]]<-res[score]
+
+        cat("\n Calculating scoreloss;", paste0("rep",j,"/var:",cols))
+        incProgress(1, session=session, message=paste0("rep_",j,"; var_",cols))
+        names(testes)[i]<-cols[i]
+      }
+
+      do.call(c,testes)
+    } )
+
+    perfms0<-data.frame(do.call(cbind,performaces0))
+    colnames(perfms0)<-paste0("score_loss", 1:ncol(perfms0))
+    rownames(perfms0)<-cols_run
+
+  })
+
+
+  perfms0<-accu-perfms0
+  perfms0
+
+
+
+}
+getinter_old<-function(newdata,obc,reps,modelist,weis,accu,scale=T,method, top.features=10, root=NULL, inter_method=c("Paired","Forward","Backward","Tops"),type="modelist", progress=T){
+  m<-modelist[[1]]
+
+  parvar<-getparvar(inter_method,newdata,modelist,top.features,scale,weis,root)
+  perfms<-get_perfloop(parvar,reps,newdata,modelist,weis,obc, type, ms=ms, progress=progress)
+  seeds=attr(perfms,"seeds")
+
+
+  if(is.data.frame(parvar)){
+    inters<-data.frame(parvar,accu-perfms)
+    rownames(inters)<-apply(inters[,1:2],1,function(x) paste(x,collapse = "::"))
+  }else{
+    if(length(parvar[[2]])>1){
+      Var1<-do.call(c,lapply(parvar,function(x){paste(x[length(x)]) }))
+      inters<-data.frame(expand.grid(root,Var1),accu-perfms)
+      rownames(inters)<-paste0("...+",inters[,2])
+    } else{
+      Var2<-do.call(c,lapply(parvar,function(x){paste(x[length(x)]) }))
+      inters<-data.frame(Var1=attr(parvar,"varnames"),Var2,accu-perfms)
+
+      rownames(inters)<-inters[,2]
+    }
+  }
+  attr(inters,"seeds")<-seeds
+  inters
+}
+
+
+getroot<-function(newdata,obc,reps,modelist,weis,accu, scale,method,top.features, root=NULL, inter_method,progress=T, ms=NULL,type="modelist", feaimp=F){
+
+  m<-modelist[[1]]
+  score<-ifelse(m$modelType=="Classification","Accuracy",'Rsquared')
+  message<-if(inter_method=="Paired"){
+    "Calculating Root..."
+  } else{
+    "Calculating score loss..."
+  }
+
+
+  tops<-gettop(modelist,scale,method,weis,top.features)
+  if(!is.null(root)){
+    pic<- which(colnames(newdata)%in%root)
+  }else {
+    pic<-which(colnames(newdata)%in%tops)}
+  cols_run<-colnames(newdata)[pic]
+  if(isTRUE(progress)){
+    session=getDefaultReactiveDomain()
+  } else{
+    session<-MockShinySession$new()
+  }
+  nmax<-reps*length(cols_run)
+  withProgress(min=0, max=nmax,message=message,session=session,{
+    performaces0<-lapply(1:reps, function(j){
+      testes<-list()
+      for(i in 1:length(cols_run)) {
+        temp<-newdata
+        cols<-as.character(cols_run[i])
+        temp[,cols]<-sample(newdata[,cols])
+        pred<-if(type=="modelist"){
+          getpreds(modelist,temp,weis)
+        }else{predict(ms,temp)}
+        if(isFALSE(feaimp)){
+        res<-postResample(pred,obc)
+        testes[[i]]<-res[score]
+        }
+        cat("\n Calculating scoreloss;", paste0("rep",j,"/var:",cols))
+        incProgress(1, session=session, message=paste0("rep_",j,"; var_",cols))
+        names(testes)[i]<-cols[i]
+      }
+
+      do.call(c,testes)
+    } )
+
+    perfms0<-data.frame(do.call(cbind,performaces0))
+    colnames(perfms0)<-paste0("score_loss", 1:ncol(perfms0))
+    rownames(perfms0)<-cols_run
+
+  })
+
+
+  perfms0<-accu-perfms0
+  perfms0
+
+
+
+}
+getinter<-function(newdata,obc,reps,modelist,weis,accu,scale=T,method, top.features=10, root=NULL, inter_method=c("Paired","Forward","Backward","Tops"),type="modelist", progress=T){
+  m<-modelist[[1]]
+
+  parvar<-getparvar(inter_method,newdata,modelist,top.features,scale,weis,root)
+  perfms<-get_perfloop(parvar,reps,newdata,modelist,weis,obc, type, ms=ms, progress=progress)
+  seeds=attr(perfms,"seeds")
+
+
+  if(is.data.frame(parvar)){
+    inters<-data.frame(parvar,accu-perfms)
+    rownames(inters)<-apply(inters[,1:2],1,function(x) paste(x,collapse = "::"))
+  }else{
+    if(length(parvar[[2]])>1){
+      Var1<-do.call(c,lapply(parvar,function(x){paste(x[length(x)]) }))
+      inters<-data.frame(expand.grid(root,Var1),accu-perfms)
+      rownames(inters)<-paste0("...+",inters[,2])
+    } else{
+      Var2<-do.call(c,lapply(parvar,function(x){paste(x[length(x)]) }))
+      inters<-data.frame(Var1=attr(parvar,"varnames"),Var2,accu-perfms)
+
+      rownames(inters)<-inters[,2]
+    }
+  }
+  attr(inters,"seeds")<-seeds
+  inters
+}
+
+
+get_Acculoss<-function(newdata,modelist,scale,obc,weis,root,accu,sig,reps,type="modelist", ms=NULL,top.features=10){
+  parvar<-getparvar("Tops",newdata,modelist,top.features=top.features,scale=scale,weis,root=root)
+  acc<-get_perfloop(parvar,reps,newdata,modelist,weis, obc,type=type,ms=ms)
+  acc2<-acc
+  pics<-which(acc2>accu,T)
+  acc2[pics]<-accu
+  accures<-accu-acc2
+  accumean<-apply(accures,1,mean)
+
+
+  df<-reshape2::melt(data.frame(id=rownames(t(accures)),t(accures)), id="id")
+  res<-pairwise.t.test(df$value,df$variable, alternative="less",paired=F)
+  pic<-which(as.vector(apply(res$p.value,1,function(x) x<=sig))==T)
+  res<-data.frame(res$p.value)
+  sigs<-which(res<=sig, arr.ind = T)
+  reds<-data.frame(
+    pvalue=res[sigs],
+    Var1=rownames(res)[sigs[,1]],
+    Var2=colnames(res)[sigs[,2]]
+  )
+  sigvars<-unique(reds[,3])
+  attr(accumean,"sigvars")<-sigvars
+  beep(10)
+  accumean
+
+}
+get_Acculoss<-function(newdata,modelist,scale,obc,weis,root,accu,reps,type="modelist", ms=NULL,top.features=10){
+  parvar<-getparvar("Tops",newdata,modelist,top.features=top.features,scale=scale,weis,root=root)
+  acc<-get_perfloop(parvar,reps,newdata,modelist,weis, obc,type=type,ms=ms)
+  acc}
+
+getsig_aculoss_old<-function(acc, accu=NULL,sig){
+  acc2<-acc
+
+  if(is.null(accu)){
+    accures<-acc2
+  } else {
+    pics<-which(acc2>accu,T)
+    acc2[pics]<-accu
+    accures<-accu-acc2
+  }
+  accumean<-apply(accures,1,mean)
+
+
+  df<-reshape2::melt(data.frame(id=rownames(t(accures)),t(accures)), id="id")
+  res<-pairwise.t.test(df$value,df$variable, alternative="greater",paired=F)
+  pic<-which(as.vector(apply(res$p.value,1,function(x) x<=sig))==T)
+  res<-data.frame(res$p.value)
+  sigs<-which(res<=sig, arr.ind = T)
+  reds<-data.frame(
+    pvalue=res[sigs],
+    Var1=rownames(res)[sigs[,1]],
+    Var2=colnames(res)[sigs[,2]]
+  )
+  sigvars<-unique(reds[,3])
+  attr(accumean,"sigvars")<-sigvars
+  beep(10)
+  accumean
+}
+getsig_aculoss<-function(acc, accu=NULL,sig,test="greater"){
+  accures<-acc
+  acc<-data.frame(acc)
+  accumean<-apply(accures,1,mean)
+  i=20
+  ps<-lapply(1:nrow(acc),function(i){
+    rownames(acc)
+    remaining<-acc[-i,]
+    mean(unlist(acc[i,]))
+    mean(unlist(remaining))
+    re<-t.test(unlist(acc[i,]),unlist(remaining), alternative=test, paired=F)
+    re
+  })
+  st<-unlist(lapply(ps,function(x) x$statistic))
+  ps<-unlist(lapply(ps,function(x) x$p.value))
+  sigvars<-rownames(acc)[which(ps<=sig)]
+
+  attr(accumean,"sigvars")<-sigvars
+  beep(10)
+  accumean
+}
+
+getsigs2_loss<-function(inter_res0,sig=0.05){
+  inters=inter_res0$inters
+  perfms0=inter_res0$perfms0
+  root=perfms0[inters[,1],]
+  root_inter<-list(loss_root=root,loss_inter=inters[,-c(1:2)])
+  rownames(root_inter$loss_inter)<-apply(inters[,1:2],1,function(x) paste(x,collapse=':'))
+  ro<-root_inter[[2]]
+  data=reshape2::melt(data.frame(id=rownames(ro),ro), id="id")
+  res<-lm(value~as.factor(id),data=data)
+  res<-pairwise.t.test(data$value,data$id,  p.adjust.method="bonferroni",alternative="greater")
+  pic<-which(as.vector(apply(res$p.value,1,function(x) x<=0.05))==T)
+  res<-data.frame(res$p.value)
+  sigs<-which(res<=sig, arr.ind = T)
+  reds<-data.frame(
+    pvalue=res[sigs],
+    Var1=rownames(res)[sigs[,1]],
+    Var2=colnames(res)[sigs[,2]]
+  )
+  reds
+}
+getReg_wei<-function(modelist,newdata,obc, en_method,weitype){
+req(is.numeric(obc))
+  weis<-rep(1,length(modelist))
+  if(en_method%in%c("non-weighted")){
+    return(weis)
+  }
+  m<-modelist[[1]]
+  class=which(colnames(m$trainingData)==".outcome")
+  traindata<-data.frame(m$trainingData[-class])
+  #req(sum(colnames(newdata)%in%colnames(colnames(m$trainingData)[-class])==ncol(newdata)))
+  req(sum(names(obc)%in%rownames(newdata))==length(obc))
+  newdata<-newdata[names(obc),colnames(m$trainingData)[-class]]
+  if(en_method=="accu_weighted") {
+    if(weitype=="training"){
+      weis<-do.call(rbind,lapply(modelist,function(m){
+        postResample(m$pred$pred,m$pred$obs)
+      }))
+      weis<-if(m$modelType=="Classification"){weis[,"Accuracy"]
+      } else{weis[,'Rsquared']}
+    }
+    if(weitype=="test") {
+      req(nrow(newdata)==length(obc))
+
+      weis<-unlist(do.call(data.frame,lapply(modelist,function(m){
+        pred<-suppressWarnings(predict(m,newdata))
+        req(length(pred)==length(obc))
+        res<-postResample(pred,obc)
+        res<-if(m$modelType=="Classification"){res["Accuracy"]
+        } else{res['Rsquared']}
+        res
+      }
+      )))
+    }
+    weis<-weis/sum(weis)
+    weis
+    #weis<-getAccu_wei(predtab,obc)
+
+  }
+}
+
+
+
+getClass_wei<-function(predtab,obc,modelist, en_method, weitype="test",newdata){
+  req(is.factor(obc))
+  req(length(predtab)>0)
+  req(ncol(predtab)>1)
+  req(length(weitype)==1)
+
+  weis<-rep(1,ncol(predtab))
+  if(en_method%in%c("non-weighted")){
+    names(weis)<-names(modelist)
+    return(weis)
+  }
+  m<-modelist[[1]]
+  class=which(colnames(m$trainingData)==".outcome")
+  traindata<-data.frame(m$trainingData[-class])
+  if(weitype=="training"){
+    newdata<-traindata
+    predtab<-predcomb_table(modelist,newdata)
+    obc_train<-m$trainingData[[class]]
+    names(obc_train)<-rownames(traindata)
+    obc<-obc_train
+
+  }
+  newdata<-newdata[,colnames(m$trainingData)[-class]]
+  tab1<-apply(predtab, 2,function(x){
+    as.numeric(x==obc)
+  })
+  if(en_method=="weighted") {
+    for(i in 1:nrow(tab1)){
+      for(j in 1:length(weis)){
+        ai=sum(tab1[i,]==0)/ncol(tab1)
+        weis[j]<-if(tab1[i,j]==1){weis[j]+ai} else {weis[j]}
+      }
+    }
+    names(weis)<-names(modelist)
+    return(weis)
+  }
+
+  if(en_method=="accu_weighted") {
+    if(weitype=="training"){
+      weis<-do.call(rbind,lapply(modelist,function(m){
+        postResample(m$pred$pred,m$pred$obs)
+      }))
+      weis<-if(m$modelType=="Classification"){weis[,"Accuracy"]
+      } else{weis[,'Rsquared']}
+      weis<-weis/sum(weis)
+      names(weis)<-names(modelist)
+      return(weis)
+    }
+    if(weitype=="test") {
+      weis<-unlist(do.call(data.frame,lapply(modelist,function(m){
+        pred<-suppressWarnings(predict(m,newdata=newdata))
+        res<-postResample(pred,obc)
+        res<-if(m$modelType=="Classification"){res["Accuracy"]
+        } else{res['Rsquared']}
+        res
+      }
+      )))
+      weis<-weis/sum(weis)
+      names(weis)<-names(modelist)
+      return(weis)
+    }
+    #weis<-getAccu_wei(predtab,obc)
+
+  }
+
+
+  weis
+}
+getAccu_wei<-function(predtab,obc){
+  model_perfomaces<-data.frame(t(apply(predtab,2,function(i){
+    postResample(i,obc)
+  })))
+  weis<-model_perfomaces$Accuracy
+  names(weis)<-colnames(predtab)
+  weis
+}
+
+
+
+getweis<-function(modelist,predtab, obc, en_method, weitype,newdata){
+  if(modelist[[1]]$modelType=="Classification") {
+    weis<-getClass_wei(predtab,obc,modelist, en_method, weitype,newdata)}else {
+      weis<-getReg_wei(modelist,newdata,obc, en_method,weitype)}
+}
+getinteraction<-function(newdata,predtab,weis,obc,pred,reps,modelist,sig=0.05,top.features=10, scale=T, en_method="weighted", root=NULL, weitype, inter_method=c("Paired","Forward","Backward")){
+  inter_method=match.arg(inter_method,c("Paired","Forward","Backward"))
+
+  m<-modelist[[1]]
+  predtrain<-pred
+  accu<-postResample(predtrain,obc)
+  accu<-if(m$modelType=="Classification"){accu["Accuracy"]
+  } else{accu['Rsquared']}
+  perfms0<-getroot(newdata,obc,reps,modelist,weis,accu, scale,en_method,top.features, root=root,inter_method=inter_method)
+  inters<-getinter(newdata,obc,reps,modelist,weis,accu,scale,en_method, top.features, root=root,inter_method=inter_method, type="modelist")
+  list(perfms0=perfms0,inters=inters)}
+
+
+get_ensemble_pred<-function(predtab,modelist, en_method=c("weighted","non-weighted"), obc=NULL, weitype,newdata,weis){
+
+
+  type<-modelist[[1]]$modelType
+  if(type=="Regression"){
+    if(en_method=="non-weighted"){
+      get_mavoting(predtab,modelist)
+    } else{
+      get_weimean(predtab,weis)
+    }
+
+  } else{
+    if(en_method=="non-weighted"){
+      get_mavoting(predtab,modelist)
+    } else{
+      get_weivoting(predtab,weis,modelist)
+    }
+  }
+
+}
+
+get_acculoss_comb<-function(modelist,predtab, newdata,obc,reps=5,sig=0.01,en_method=c("weighted","non-weighted"),weitype){
+  m<-modelist[[1]]
+  acculist<-list()
+  # get the table of predictions
+
+
+  if(m$modelType=="Classification"){
+    weis<-if(en_method=="non-weighted"){
+      rep(1,ncol(predtab))
+
+    } else { getClass_wei(predtab,obc,modelist, en_method,weitype,newdata)}
+    newpredictions<-get_weivoting(predtab,weis,modelist)
+  } else {
+    weis<-if(en_method=="non-weighted"){
+      rep(1,ncol(predtab))
+
+    } else{getReg_wei(modelist,newdata,obc, en_method,weitype)}
+    newpredictions<-get_weimean(predtab,weis)
+  }
+
+
+  class=which(colnames(m$trainingData)==".outcome")
+  X<-data.frame(m$trainingData[-class])
+  Y<-m$trainingData[,class]
+  accu=1
+  kmax<-ncol(X)*reps
+  predtrain<-newpredictions
+  accu<-postResample(predtrain,obc)
+  withProgress(min=0, max=ncol(X)*reps,message="Running...",{
+    init<-1
+    metric_loss<-for(i in 1:ncol(X)) {
+
+    accus<-lapply(1:reps, function(...){
+      temp<-newdata
+
+      temp[,i]<-sample(temp[,i])
+      predtab_i<-predcomb_table2(modelist,newdata=temp)
+      if(m$modelType=="Classification"){
+        pred<-get_weivoting(predtab_i,weis,modelist)} else{
+          pred<-get_weimean(predtab_i,weis)
+        }
+      res<-accu-caret::postResample(pred,obc)
+      incProgress(1)
+      init<-init+1
+      cat("\n",init,"/",kmax)
+      #cat("\n",ii+i,"/",kmax)
+      res
+    })
+
+    res_temp<- do.call(rbind,accus )
+    accu_temp<-if(m$modelType=="Classification"){res_temp[,"Accuracy"]
+    } else{res_temp[,'Rsquared']}
+    acculist[[i]]<-accu_temp
+    incProgress(1)
+  }
+  })
+
+
+  names(acculist)<-colnames(newdata)
+  accu_loss<-apply(do.call(rbind,acculist),1,function(i)  mean(i))
+  # accu_loss[which(accu_loss>=sig)]
+  accu_loss
+}
+
+
+get_wei_percetages<-function(predtab,
+                             modelist,
+                             obc,
+                             en_method, weitype, newdata){
+
+  weis<-getweis(modelist,predtab, obc, en_method, weitype,newdata)
+  res_forest<-get_weivoting_models(predtab,weis,modelist)
+  res_forest
+}
+
+
+
+get_options_show<-function(res_forest, sortby,obc,  nhist_tree,data_factors=NULL){
+
+
+  ord<-get_qclass_ord(res_forest,obc, sortby, data_factors)
+  data=t(res_forest[ord,])
+  d=1:ncol(data)
+  res<-split(d, ceiling(seq_along(d)/nhist_tree))
+  options_num<-lapply(res,function (x) range(x))
+  options_show=as.vector(do.call(c,lapply(options_num, function(x) paste(x[1], x[2], sep = "-"))))
+  list(options_num=options_num,options_show=options_show)
+}
+
+get_qclass_ord<-function(res_forest,obc, sortby, data_factors=NULL){
+  if(is.factor(obc)){
+    result<-get_wei_errors_class(res_forest,obc)
+    res1<-"Accuracy"
+    res2<-"Error"
+  } else{
+    result<-data.frame(res_forest)
+    res1="RMSE"
+    res2="MAE"
+  }
+  if(sortby%in%c("Accuracy","Error")) {
+    ord<-switch (sortby,
+                 "Accuracy" =order(result[[res1]], decreasing = T),
+                 "Error"=order(result[[res2]], decreasing = T))
+  } else {
+    sortby<-data_factors[rownames(result),sortby, drop=F]
+    df<-cbind(result,sortby)
+    ord<-order(df[,ncol(df)])
+  }
+  ord<-rownames(result)[ord]
+}
+
+
+getshow_qclass<-function(res_forest, sortby,predtab,obc, splitdata_trees,nhist_tree,data_factors){
+  res<-get_options_show(res_forest, sortby,obc,  nhist_tree,data_factors)
+  options_num<-res$options_num
+  options_show<-res$options_show
+  options_num_sel<-options_num[[which(options_show==splitdata_trees)]]
+
+  options_num_sel
+}
+
+
+
+
+
+
+get_obs_erros_ensemble_class<-function(resforest,predtab,modelist,obc,pred, round, en_method){
+  if(en_method=="non-weighted"){
+
+    res<-getobs_errors_class(predtab,obc)
+  } else{  res<-get_wei_errors_class(resforest,obc)*100}
+  res<-data.frame(res)
+  res<-round(res,round)
+  res$obs<-unlist(obc)
+
+  res$pred<-unlist(pred)
+  res
+}
+get_wei_errors_class<-function(res_forest,obc){
+  df0<-df<-res_forest
+  df$obs<-obc
+  Result<-data.frame(Accuracy=apply(df,1,function(x) {
+    as.numeric(x[which(names(x)[-length(x)]==x[length(x)])])
+  }))
+  Result$Error<-1-Result$Accuracy
+  Result
+
+}
+
+
+
+
+get_weivoting_models<-function(predtab,weis,modelist){
+
+  predtab<-data.frame(predtab)
+  colnames(predtab)<-names(modelist)
+  levels_obc<-modelist[[1]]$levels
+  names(weis)<-names(modelist)
+  inst<-9
+  lev<-levels_obc[1]
+  res<-do.call(rbind,
+               lapply(1:nrow(predtab),function(inst){
+                 i<-predtab[inst,, drop=F]
+                 win<-unlist(
+                   lapply(levels_obc,function(lev){
+                     pic<-i[which(i==lev)]
+                     weis
+                     sum(weis[names(pic)])
+                   })
+                 )
+
+
+               })
+  )
+  result<-data.frame(res)
+  rownames(result)<-rownames(predtab)
+  colnames(result)<-levels_obc
+  result<-decostand(result,"total")
+  result
+
+}
+
+plotforest_qclass<-function(
+    result_forest,pred_res, palette="turbo", newcolhabs,ylab="Observations",xlab="Percentage of classifications", leg="Model predictions" ,leg2="Final prediction",cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13,textcolor="white", main="", obc,leg3="Correct observation",size_points=3){
+  df0<-df<-result_forest
+  pred=pred_res
+  obs<-obc
+
+
+
+  df<-data.frame(t(apply(df,1,function(x) x/sum(x))))
+  colnames(df)<-colnames(df0)
+  df$id=rownames(df)
+  df$final_pred<-pred[rownames(df),]
+  df$order<-1:nrow(df)
+  df$obs<-obs[rownames(df)]
+#  df$final_pred<-as.factor(sample(c(2,3,4),6,replace = T))
+
+  df3<-reshape2::melt(df,id=c('id','order','obs',"final_pred"))
+  colnames(df3)<-c("id",'order','obs',"final_pred","pred","value")
+  a<-df3[,c("id","obs","final_pred")]
+  df4<-reshape2::melt(a,id="id")
+
+  df5<-df4<-df3
+  df4$y<-1.1
+  df4$val<-df4$final_pred
+  df5$y<-1.2
+  df5$val<-df5$obs
+  df5$fac<-"observed"
+  df4$fac<-"predicted"
+
+  df6<-rbind(df4,df5)
+
+  col<-getcolhabs(newcolhabs,palette, nlevels(pred[,1]))
+  p<-ggplot(df3, aes(x=reorder(id,order), y=value, fill=pred)) +
+    geom_bar(stat="identity") +
+    geom_text(aes(label=ifelse(value >= 0.07, paste(round(value*100,2),"%"),""),y=value),position=position_stack(vjust=0.5), colour=getcolhabs(newcolhabs,textcolor,1)) +
+    coord_flip() +
+    scale_y_continuous(labels = percent_format()) +
+    labs(y="", x="")+scale_fill_manual(name=leg,values=col)
+
+
+
+  col2<-getcolhabs(newcolhabs,palette, nlevels(pred[,1]))[which(levels(pred[,1])%in%c(df4$val) )]
+
+
+  p<-p+geom_point(aes(x=id, y=y, col=val, shape=fac),data=df6,size=size_points)+scale_color_manual(name=leg2,values=col2)+guides(
+
+      fill = guide_legend(override.aes = list(shape = NA))
+    )+scale_shape_manual(name="",values = c(16,15))
+
+
+
+  p<-p+ylab(xlab)+
+    xlab(ylab)+theme(
+      axis.text=element_text(size=cex.axes),
+      axis.title=element_text(size=cex.lab),
+      plot.title=element_text(size=cex.main),
+      strip.text.x=element_text(size=cex.main),
+      legend.text=element_text(size=cex.leg),
+      legend.title=element_text(size=cex.leg))
+
+
+
+  p<-p+ggtitle(main)
+  p
+}
+
+
+get_accu<-function(modelist,newpredictions,obc){
+  m<-modelist[[1]]
+  accu<-postResample(unlist(newpredictions),obc)
+  accu<-if(m$modelType=="Classification"){accu["Accuracy"]
+  } else{accu['Rsquared']}
+
+}
+getpreds<-function(modelist,newdata,weis){
+  m<-modelist[[1]]
+  predtab_i<-predcomb_table2(modelist,newdata)
+  if(m$modelType=="Classification"){
+    pred<-get_weivoting(predtab_i,weis,modelist)} else{
+      pred<-get_weimean(predtab_i,weis)
+    }
+  pred[,1]<-factor(pred[,1],levels=m$levels)
+pred
+  }
+
+comb_feaimp<-function(modelist,  scale=T, progress=T){
+  m<-modelist[[1]]
+  if(isTRUE(progress)){
+    withProgress(min=0, max=length(modelist),message="Running...",{
+      imptable<-lapply(modelist,function(m){
+
+        if(m$modelType=="Classification"){
+          imp<-varImp(m,scale)
+          imp2<-apply(imp$importance,1,mean)
+          if(isTRUE(scale)){imp2<-scales::rescale(imp2,c(0,100))
+          }
+          incProgress(1)
+          imp2
+        } else{
+          imp<-varImp(m,scale)
+          imp2<-imp$importance
+          incProgress(1)
+          imp2
+        }
+      })
+    })
+  } else{
+
+    imptable<-lapply(modelist,function(m){
+
+      if(m$modelType=="Classification"){
+        imp<-varImp(m,scale)
+        imp2<-apply(imp$importance,1,mean)
+        if(isTRUE(scale)){imp2<-scales::rescale(imp2,c(0,100))
+        }
+
+        imp2
+      } else{
+        imp<-varImp(m,scale)
+        imp2<-imp$importance
+
+        imp2
+      }
+    })
+
+  }
+
+
+
+  res<-do.call(cbind,imptable)
+  colnames(res)<-names(modelist)
+  res
+
+}
+
+
+getparvar<-function(inter_method,newdata,modelist,top.features,scale,weis, root){
+  tops<-gettop(modelist,scale,method,weis,top.features)
+  inter_method=match.arg(inter_method,c("Paired","Forward","Backward","Tops"))
+
+
+  ###
+
+  pic<-if(!is.null(root)){which(colnames(newdata)%in%root)
+  } else{which(colnames(newdata)%in%tops)}
+  if(inter_method=="Paired"){
+    parvar<-expand.grid( colnames(newdata)[pic] ,tops, stringsAsFactors = F)
+    parvar<-data.frame(parvar[-which(apply(apply(parvar,1,duplicated),2,sum)==1),])
+    attr(parvar,"varnames")<-apply(parvar,1,function(x)paste0(x,collapse="::"))
+
+    }
+  if(inter_method=="Forward"){
+    parvar<-list()
+    n<-1
+    for(i in 1:(length(tops)-1)){
+      parvar[[i]]<-tops[n]
+      n<-c(n,length(n)+1)
+    }
+    attr(parvar,"varnames")<-unlist(lapply(parvar,function(x)paste0("...+",x[length(x)])))
+  }
+  if(inter_method=="Backward"){
+    parvar<-list()
+    n<-1
+    for(i in (length(tops)-1):1){
+      parvar[[i]]<-tops[n]
+      n<-c(n,length(n)+1)
+    }
+
+    attr(parvar,"varnames")<-unlist(lapply(parvar,function(x)paste0("...-",x[length(x)])))
+  }
+  if(inter_method=="Tops"){
+    parvar<-as.list(colnames(newdata))
+    attr(parvar,"varnames")<-unlist(parvar)
+  }
+  return(parvar)
+}
+
+get_perfloop<-function(parvar,reps,newdata,modelist,weis,obc, type="modelist", ms=NULL,progress=T){
+
+  score<-ifelse(modelist[[1]]$modelType=="Classification","Accuracy",'Rsquared')
+
+
+  nloop<-if(is.data.frame(parvar)){
+    nrow(parvar) } else{length(parvar)}
+
+  parloop<-if(is.data.frame(parvar)){
+    as.list(data.frame(t(parvar)))
+  } else{
+    parloop<-parvar
+
+  }
+
+  nsample<-nrow(newdata)
+  if(isTRUE(progress)){
+    session=getDefaultReactiveDomain()
+  } else{
+    session<-MockShinySession$new()
+  }
+  withProgress(min=0, max=length(parloop)*reps,message="Running....",session=session,{
+i<-j<-1
+  testes<-vector('list',length(parloop))
+  performaces<-vector('list',reps)
+  for(j in 1:reps){
+    a<-1
+    for(i in parloop) {
+      cat(paste0("\n Rep", j, "; Var_",paste0(i,collapse = "+")))
+
+      temp<-newdata
+
+      temp[i]<-lapply(as.list(newdata[,i, drop=F]),function(x) x[sample(1:nsample)])
+
+      pred<-if(type=="modelist"){
+        getpreds(modelist,temp,weis)
+      }else{predict(ms,temp)}
+      res<-postResample(pred,obc)
+      testes[[a]]<-res[score]
+      a<-a+1
+     incProgress(1, message=paste0("inter_",i), session=session)
+    }
+    #
+
+    res<-do.call(c,testes)
+
+    performaces[[j]]<-res
+  }
+   })
+  perfms<-data.frame(do.call(cbind,performaces))
+  colnames(perfms)<-paste0("score_loss", 1:ncol(perfms))
+  rownames(perfms)<-attr(parvar,"varnames")
+  perfms
+}
+
+
+
+
+getsigs_loss2<-function(inter_res0,sig=0.05){
+  accures<-rbind(inter_res0[[1]],inter_res0[[2]][,-c(1:2)])
+  df<-reshape2::melt(data.frame(id=rownames(t(accures)),t(accures)), id="id")
+  res<-pairwise.t.test(df$value,df$variable, alternative="less",paired=F)
+  pic<-which(as.vector(apply(res$p.value,1,function(x) x<=sig))==T)
+  res<-data.frame(res$p.value)
+  sigs<-which(res<=sig, arr.ind = T)
+  reds<-data.frame(
+    pvalue=res[sigs],
+    Var1=rownames(res)[sigs[,1]],
+    Var2=colnames(res)[sigs[,2]]
+  )
+  testes<-res
+  sigvars<-unique(reds[,3])
+  statistic=unlist(lapply(testes,function(res){
+    if(is.numeric(res)){"NULL"}else{
+      res$statistic}
+  }))
+
+  list(sigs=sigvars,teste=data.frame(p.value,statistic))
+
+}
+
+
+getsigs_loss<-function(root_inter,reps,inters,sig=0.05, inter_method){
+
+
+  testes<-lapply(1:nrow(root_inter[[2]]),function(i){
+    if(inter_method=="Paired"){
+      x=unlist(root_inter[[1]][i,])
+      y=unlist(root_inter[[2]][i,])
+      }
+
+    if(inter_method=="Forward"){
+      if(i+1<=nrow(root_inter[[2]])){
+        x=unlist(root_inter[[2]][i,])
+        y=unlist(root_inter[[2]][i+1,])
+      } else{
+        x=1
+        y=1
+      }
+    }
+    if(inter_method=="Backward"){
+      if((nrow(root_inter[[2]])-i)!=0){
+        x=unlist(root_inter[[2]][nrow(root_inter[[2]]),])
+        y=unlist(root_inter[[2]][nrow(root_inter[[2]])-i,])
+      } else{
+        x=1
+        y=1
+      }
+    }
+
+    if(identical(x,y)|(mean(x)==0)+(mean(y)==0)==1){
+      1
+    } else{
+      data=data.frame(x=c(x,y),
+                      fac=c(rep('r',reps),rep('i',reps)))
+
+      try({
+        res<-t.test(x,y,data=data, alternative="two.sided",paired=T)
+        res
+      })
+    }
+  })
+
+
+  p.value=unlist(lapply(testes,function(res){
+    if(is.numeric(res)){res}else{
+      res$p.value}
+  }))
+  statistic=unlist(lapply(testes,function(res){
+    if(is.numeric(res)){"NULL"}else{
+      res$statistic}
+  }))
+
+  names(p.value)<-rownames(root_inter[[2]])
+
+  pic<-which(p.value<=0.01)
+
+  res<-inters[pic,1:2]
+  rownames(res)<-rownames(root_inter$mean_loss_both_vars)[pic]
+  list(sigs=res,teste=data.frame(p.value,statistic))
+
+}
+gettop<-function(modelist,scale,en_method,weis,top.features=10) {
+  allimportance<-comb_feaimp(modelist,  scale=scale, progress=F)
+  mean_importance<-get_weig_faimp(allimportance, en_method="non-weighted", weis=weis)
+  names(mean_importance)[order(mean_importance,decreasing=T)[1:top.features]]
+
+}
+
+getdiffs_inter<-function(inter_res){
+  means<-do.call(data.frame,lapply(inter_res[1:2],function(x){
+    apply(x,1,function(xx) mean(xx))
+  }))
+  rownames(means)<-rownames(inter_res$mean_loss_both_vars)
+  diffs<-means[2]-means[1]
+  sds<-do.call(data.frame,lapply(inter_res[1:2],function(x){
+    sd=apply(x,1,function(xx) sd(xx))
+    sd
+  }))
+
+  mean_loss_diff=means[2]-means[1]
+  sd_loss_diff<-data.frame(mean_root=means[1],mean_inter=means[2],sd_loss_diff=apply(as.matrix(inter_res[[2]])-as.matrix(inter_res[[1]]),1,sd))
+  res<-data.frame(mean_loss_diff=unlist(mean_loss_diff),sd_loss_diff)
+  rownames(res)<-rownames(mean_loss_diff)
+  res
+}
+#inter_res0<-vals$inter_res0
+
+
+get_inter_results<-function(inter_res0, reps=5,sig=0.05,inter_method){
+  inters=inter_res0$inters
+  perfms0=inter_res0$perfms0
+  root=perfms0[inters[,1],]
+  root_inter<-list(mean_loss_Var1=root,mean_loss_both_vars=inters[,-c(1:2)])
+  if(inter_method=="Paired"){
+  rownames(root_inter$mean_loss_both_vars)<-apply(inters[,1:2],1,function(x) paste(x,collapse=':'))
+  } else{
+
+  }
+
+  rownames(root_inter$mean_loss_both_vars)<-rownames(inters)
+  teste<-getsigs_loss(root_inter,reps,inters,sig,inter_method)
+  #teste<-getsigs_loss2(inter_res0,sig)
+  root_inter$sig_inters<-teste$sigs
+  root_inter$diff_to_root<-getdiffs_inter(root_inter)
+  root_inter$diff_to_root$statistic<-teste$teste$statistic
+  root_inter$diff_to_root$p.value<-teste$teste$p.value
+
+  nsigs<-nrow(root_inter$sig_inters)
+  root_inter$diff_to_root$sig<-""
+  root_inter$diff_to_root[rownames(root_inter$sig_inters),"sig"]<-rep("*",nsigs)
+
+  interaction_results<-data.frame(root_inter$diff_to_root)
+  cols<-c('mean_loss_Var1','mean_loss_both_vars','mean_loss_diff','sd_loss_diff','statistic','p.value','sig')
+  interaction_results<-interaction_results[cols]
+
+  root_inter$diff_to_root<-interaction_results
+
+
+
+
+
+
+
+  root_inter$mean_loss_Var1_unique<-perfms0
+  root_inter
+}
+get_interplot<-function(inter_res,palette="turbo",newcolhabs,cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13, leg="", main="",xlab="Interactions",ylab="Score loss (%)"){
+
+  means<-do.call(data.frame,lapply(inter_res[1:2],function(x){
+    apply(x,1,function(xx) mean(xx))
+  }))
+  rownames(means)<-rownames(inter_res$mean_loss_both_vars)
+  diffs<-means[2]-means[1]
+  sds<-do.call(data.frame,lapply(inter_res[1:2],function(x){
+    sd=apply(x,1,function(xx) sd(xx))
+    sd
+  }))
+  df_root<-data.frame(id=rownames(inter_res$mean_loss_both_vars),mean=means[,1],sd=sds[,1],fac="root")
+  df_inter<-data.frame(id=rownames(inter_res$mean_loss_both_vars),mean=means[,2],sd=sds[,2],fac="inter")
+
+
+  df3<-rbind(df_root,df_inter)
+  pic<-rownames(inter_res$sig_inters)
+  df3<-df3[which(df3[,1]%in%pic),]
+  colnames(df3)[2]<-"value"
+
+  p<-ggplot(df3, aes(x=reorder(id,value, mean,decreasing =F), y=value)) +
+    geom_point(aes(y=value, color=fac)) +
+    geom_errorbar(aes(ymin=value-sd, ymax=value+sd,color =fac), width=.2)
+  p<-p+ scale_color_manual(name=leg,values=getcolhabs(newcolhabs,palette,2))+
+    xlab(xlab)+
+    ylab(ylab)
+
+
+  p<-p+
+    #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    coord_flip()+
+    theme(
+      axis.text=element_text(size=cex.axes),
+      axis.title=element_text(size=cex.lab),
+      plot.title=element_text(size=cex.main),
+      legend.text=element_text(size=cex.leg),
+      legend.title=element_text(size=cex.leg))
+
+  p+ggtitle(main)
+
+}
+get_interplot2<-function(inter_res,palette="turbo",newcolhabs,cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13, leg="", main="",xlab="Interactions",ylab="Mean score gain (%)"){
+  df<-inter_res$diff_to_root
+  df$sig[df$sig==""]<-paste0("non-sig")
+  df$sig[df$sig=="*"]<-paste0("sig")
+  df$mean_loss_diff[df$mean_loss_diff<0]<-0
+  df$mean_loss_diff<-df$mean_loss_diff
+  df3<-data.frame(id=rownames(df),df)
+  df3$fac=1
+  p<-ggplot(df3, aes(x=reorder(id,mean_loss_diff , mean,decreasing =F), y=mean_loss_diff, fill=sig))+
+    geom_bar(stat="identity",position=position_dodge())
+    #geom_point(aes(y=mean_loss_diff , color=sig)) +
+    #geom_errorbar(aes(ymin=mean_loss_diff, ymax=mean_loss_diff+sd_loss_diff   ,color =sig), width=.2)
+ # p<-p+geom_hline(yintercept = df3$mean_loss_Var1)
+
+  p<-p+ scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette,2))+
+    xlab(xlab)+
+    ylab(ylab)
+
+
+  p<-p+
+    #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    coord_flip()+
+    theme(
+      axis.text=element_text(size=cex.axes),
+      axis.title=element_text(size=cex.lab),
+      plot.title=element_text(size=cex.main),
+      legend.text=element_text(size=cex.leg),
+      legend.title=element_text(size=cex.leg))
+
+  p+ggtitle(main)
+}
+
+
+
+
+
+predcomb_table<-function(modelist,newdata){
+  withProgress(min=0, max=length(modelist),message="Running...",{
+    res_compre<-lapply(modelist,newdata=newdata,function(x,newdata){
+      try({
+        incProgress(1)
+        trainingData<-x$trainingData
+        trainingData<-trainingData[-which(colnames(trainingData)==".outcome")]
+        res<-suppressWarnings(predict(x,newdata= newdata[which(colnames(newdata)%in%colnames(trainingData))]))
+        res
+      })
+    })
+  })
+
+  pic<-which(unlist(lapply(res_compre,function(x)class(x)=="try-error")))
+  if(length(pic)>0){
+    res_compre<-res_compre[-pic]
+  }
+  res_compre<-data.frame(res_compre)
+  rownames(res_compre)<-rownames(newdata)
+  colnames(res_compre)<-names(modelist)
+  attr(res_compre,"rownames")<-rownames(newdata)
+  res_compre
+
+
+}
+predcomb_table2<-function(modelist,newdata){
+
+  res_compre<-lapply(modelist,newdata=newdata,function(x,newdata){
+    try({
+
+      trainingData<-x$trainingData
+      trainingData<-trainingData[-which(colnames(trainingData)==".outcome")]
+      res<-suppressWarnings(predict(x,newdata= newdata[which(colnames(newdata)%in%colnames(trainingData))]))
+      res
+    })
+  })
+
+
+  pic<-which(unlist(lapply(res_compre,function(x)class(x)=="try-error")))
+  if(length(pic)>0){
+    res_compre<-res_compre[-pic]
+  }
+  res_compre<-data.frame(res_compre)
+  rownames(res_compre)<-rownames(newdata)
+  attr(res_compre,"rownames")<-rownames(newdata)
+  res_compre
+
+
+}
+
+
+
+get_perf_by_model<-function(modelist){
+  result<-lapply(modelist, function(x){
+    res<-x$results[ rownames(x$bestTune),  ]
+    if(x$modelType=="Classification"){
+      res[,"Accuracy"]
+    } else{
+      res[,'Rsquared']
+    }
+  })
+  result<-do.call(c,result)
+
+  result
+}
+get_perfm_global<-function(modelist){
+
+
+  validate(need(sum(duplicated(lapply(modelist,function(x){
+    attr(x,"Datalist")
+  }))==F)==1,"Incompatible training data across the models"))
+  m<-modelist[[1]]
+  trainingData<-m$trainingData
+  trainingData<-trainingData[-which(colnames(trainingData)==".outcome")]
+  predtab<-predcomb_table(modelist,newdata=trainingData)
+
+  predvote<-getpredvote(modelist,predtab)
+  perf<-postResample(predvote, obc)
+  accu<-if("Accuracy"%in%names(perf)){perf['Accuracy']} else {perf['Rsquared']}
+  accu
+}
+getpredvote<-function(modelist,predtab){
+  obs_class<-do.call(data.frame,lapply(modelist,function(x){
+    x$trainingData[".outcome"]
+  }))
+  validate(need(sum(duplicated(t(obs_class))==F )==1,"Incompatible Y across the models"))
+  obc<-obs_class[,1]
+
+  if(is.factor(obc)){
+    predvote<-apply(predtab,1,function(x){
+      tabx<-table(x)
+      names(tabx)[  which.max(tabx)]
+    })
+    predvote<-factor(predvote, levels=levels(obc), labels=levels(obc))
+
+  } else {
+    predvote<-apply(predtab,1,function(x){
+      res<-data.frame(apply(do.call(data.frame,predtab),1,function(x) mean(x)))
+
+    })
+  }
+  predvote
+}
+
+
+get_weivoting<-function(predtab,weis,modelist){
+levels_obc<-modelist[[1]]$levels
+req(length(names(weis))>0)
+names(weis)<-names(modelist)
+colnames(predtab)<-names(modelist)
+  res<-unlist(
+    lapply(1:nrow(predtab),function(inst){
+      i<-predtab[inst,, drop=F]
+      win<-which.max(
+        unlist(
+          lapply(levels_obc,function(lev){
+            pic<-i[which(i==lev)]
+            sum(weis[names(pic)])
+          })
+        )
+      )
+      levels_obc[win]
+
+    })
+  )
+  names(res)<-rownames(predtab)
+  res<-data.frame(res)
+  colnames(res)<-"Majority weighted votes"
+  res
+
+}
+get_mavoting<-function(predtab,modelist){
+  type=modelist[[1]]$modelType
+  if(is.factor(predtab[[1]])){
+    col_name<-c("Majority votes")
+    res<-data.frame(as.factor(names(unlist(lapply(apply(do.call(data.frame,predtab),1,function(x) table(x)), function(x) which.max(x))))))
+
+  }else{
+    col_name<-c("Mean")
+    res<-data.frame(apply(do.call(data.frame,predtab),1,function(x) mean(x)))
+  }
+  rownames(res)<-  rownames(predtab)
+  colnames(res)<-col_name
+  res
+}
+
+get_acculoss<-function(m, newdata,obc,reps=5,sig=0.01){
+  class=which(colnames(m$trainingData)==".outcome")
+  X<-data.frame(m$trainingData[-class])
+  Y<-m$trainingData[,class]
+  accu=1
+  kmax<-ncol(X)*reps
+  accu<-postResample(caret::predict.train(m,newdata=newdata),obc)
+  acculist<-list()
+  metric_loss<-for(i in 1:ncol(X)) {
+
+    accus<-lapply(1:reps, function(...){
+      temp<-newdata
+
+      temp[,i]<-sample(temp[,i])
+      pred<-caret::predict.train(m,newdata=temp)
+      res<-accu-caret::postResample(pred,obc)
+      res
+      #init<-init+1
+      #cat("\n",init,"/",kmax)
+      #cat("\n",ii+i,"/",kmax)
+      res
+    })
+
+    res_temp<- do.call(rbind,accus )
+    accu_temp<-if(m$modelType=="Classification"){res_temp[,"Accuracy"]
+    } else{res_temp[,'Rsquared']}
+    acculist[[i]]<-accu_temp
+  }
+  names(acculist)<-colnames(newdata)
+  accu_loss<-apply(do.call(rbind,acculist),1,mean)
+
+  #accu_loss[which(accu_loss>=sig)]
+  accu_loss
+}
+
+
+
+get_weimean<-function(predtab,weis){
+  req(length(weis)==ncol(predtab))
+  res<-data.frame(
+    apply(predtab,1,function(x){
+      weighted.mean(x, weis)
+
+    })
+  )
+  colnames(res)<-"Weighted_mean"
+  res
+}
+getobs_errors_class<-function(predtab,obc){
+
+  res<-data.frame(do.call(rbind,lapply(1:length(obc),function(i){
+    x<-factor(predtab[i,],levels=levels(obc))
+    postResample(x,rep(obc[i],length(x)))[1]
+  })))
+  res$Error<-1-res[,1]
+  rownames(res)<-names(obc)
+  res*100
+}
+
+get_weig_faimp<-function(allimportance, en_method="weighted", weis=NULL){
+  if(en_method=="non-weighted"){
+    apply(allimportance,1,mean)
+  } else{
+    req(!is.null(weis))
+    get_weimean(allimportance,weis)
+  }
+
+}
+
+
+plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,ylab="Variables",xlab="Importance", colby=c("models",'acculoss',"acc"), aculoss=NULL,facet_grid=T,nvars=10, sig=0.01, leg=if(colby=="models") {'Model'}else{"Score decrease (%)"},cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13,sigvars=NULL,size.sig=1.5, acc=NULL,title=NULL,modelist=NULL){
+  if(is.null(aculoss)){aculoss<-1}
+
+  if(is.null(nvars)){
+    nvars<-nrow(moldels_importance)
+  }
+
+  if(colby%in% c("models",'acculoss')){
+  pic<-order(apply(moldels_importance,1,mean),decreasing = T)[1:nvars]
+
+  col_names<-rownames(moldels_importance)[pic]
+  moldels_importance<-moldels_importance[col_names,,drop=F]
+
+}
+  if(colby=="models"){
+    validate(need(nvars<=nrow(moldels_importance),paste0("number of variables must be less than or equal to the number of variables in the model:",nrow(moldels_importance))))
+    df<-data.frame(reshape2::melt(data.frame(id=rownames(moldels_importance),moldels_importance), id=c("id")))
+    colnames(df)<-c("variable","model","value")
+    df$acculoss<-aculoss
+
+     } else   if(colby=="acculoss"){
+    req(length(aculoss)==length(rep(rownames(moldels_importance),each=ncol(moldels_importance))))
+    names(aculoss)<-rep(rownames(moldels_importance),each=ncol(moldels_importance))
+    accu_table<-data.frame(matrix(aculoss,nrow=nrow(moldels_importance),dimnames =list(rownames(moldels_importance),colnames(moldels_importance))))
+    moldels_importance<-moldels_importance[col_names,,drop=F]
+    aculoss<-unlist(accu_table[col_names,,drop=F])
+    df<-data.frame(reshape2::melt(data.frame(id=rownames(moldels_importance),moldels_importance), id=c("id")))
+    colnames(df)<-c("variable","model","value")
+    df$acculoss<-aculoss
+  } else  if(colby=="acc"){
+    #acc<-attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$models_resampling
+    if(class(acc)[[1]]=="list"){
+      df<-do.call(rbind,lapply(1:length(acc),function(x){
+        acctemp<-acc[[x]]
+        acctemp$acculoss<-names(modelist)[x]
+        acctemp$id<-rownames(acctemp)
+        acctemp
+      }))
+      acc<-data.frame(df)
+      re<-data.frame(reshape2::melt(acc,c("id","acculoss")))
+      df<-re[order(re$value, decreasing=T),]
+      colnames(df)<-c("variable","acculoss","rep","value")
+
+    } else{
+      re<-data.frame(reshape2::melt(data.frame(id=rownames(acc),acc),"id"))
+      df<-re[order(re$value, decreasing=T),]
+      colnames(df)<-c("variable","model","value")
+      df$acculoss<-df$value
+    }
+
+
+  }
+  req(is.data.frame(df))
+
+  if(length(sigvars)>0){
+    if(class(sigvars)=="list"){
+      newres<-split(df$variable,df$acculoss)
+      x<-names(newres)[1]
+      names(sigvars)<-names(newres)
+      ss<-do.call(c,lapply(names(newres),function(x){
+        res<-data.frame(newres[x])
+        res$sig<-NA
+        res$sig[res[,1]%in%sigvars[[x]]]<-"1"
+        res$sig
+      }))
+      df$sig<-factor(ss)
+
+    }else{
+      df$sig<-NA
+      df$sig[df$variable%in%sigvars]<-"1"
+      df$sig<-factor(df$sig)
+    }
+
+  }
+
+
+
+  df$sig_pos<--1
+  df<-df[order(df$sig),]
+  if(colby=="models"){
+    col= getcolhabs(newcolhabs,palette,nrow(df))
+    p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=model))+  scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, ncol(moldels_importance)))
+    p<-p + geom_bar(stat = "identity", position="dodge")+coord_flip()
+    } else{
+
+    if(!is.null(modelist)){
+      df_naomit<-na.omit(df)
+      #df<-df[order(df$sig, decreasing=T),]
+      p<-ggplot(df, aes(x=reorder(variable,value, mean)))+
+      geom_bar(stat="identity", aes(y=value, fill=acculoss, group=acculoss))+
+      scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, length(modelist)))+coord_flip()
+    if(length(sigvars)>0){
+      p<-p+geom_point(aes(y=sig_pos, shape=sig), data=df_naomit)+scale_shape_manual(name="",values =8, labels=c(paste0("p.value","\u2264",sig)), breaks=1)+
+        labs(x=xlab, y=ylab, shape=NULL)
+    }
+    } else{
+      p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=acculoss))
+      p<-p+scale_fill_gradientn(name=leg,colors=getcolhabs(newcolhabs,palette,100))
+      p<-p + geom_bar(stat = "identity", position="dodge")+coord_flip()
+    }
+
+
+  }
+  # p + geom_bar(stat = "identity",aes(color=sig))+coord_flip()+scale_color_manual(values=c("red","blue"))
+  if(is.null(modelist)){
+    if(length(sigvars)>0){
+    df_naomit<-na.omit(df)
+    p<-p+geom_point(aes(y=sig_pos, shape=sig),size=1, data=df_naomit)+scale_shape_manual(name="",values =8, labels=c(paste0("p.value","\u2264",sig)), breaks=1)
+  }
+  }
+
+
+  # Use vars() to supply variables from the dataset:
+  if(isTRUE(facet_grid)){
+    if(is.null(modelist)){
+    p<-p + facet_grid(~factor(model, levels=colnames(moldels_importance)))+xlab(xlab)+ylab(ylab)} else{
+      p<-p + facet_grid(~factor(acculoss, levels=names(modelist)))+xlab(xlab)+ylab(ylab)
+    }
+
+  }
+  p<-p+xlab(xlab)+ylab(ylab)+ggtitle(title)
+  p<-p+
+    theme(
+      axis.text=element_text(size=cex.axes),
+      axis.title=element_text(size=cex.lab),
+      plot.title=element_text(size=cex.main),
+      strip.text.x=element_text(size=cex.main),
+      legend.text=element_text(size=cex.leg),
+      legend.title=element_text(size=cex.leg))
+p
+}
+
+plot_model_features2<-function(moldels_importance, palette="turbo", newcolhabs,ylab="Variables",xlab="Importance", colby=c("models",'aculoss'), aculoss=NULL,facet_grid=T,nvars=10, sig=0.01, leg=if(colby=="models") {'Model'}else{"Score decrease (%)"},cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13,sigvars=NULL){
+  if(is.null(aculoss)){aculoss<-1}
+
+
+  if(is.null(nvars)){
+    nvars<-nrow(moldels_importance)
+  }
+
+
+  if(colby=="models"){
+    validate(need(nvars<=nrow(moldels_importance),paste0("number of variables must be less than or equal to the number of variables in the model:",nrow(moldels_importance))))
+
+  pic<-order(apply(moldels_importance,1,mean),decreasing = T)[1:nvars]
+
+  col_names<-rownames(moldels_importance)[pic]
+  moldels_importance<-moldels_importance[col_names,,drop=F]
+  } else{
+    req(length(aculoss)==length(rep(rownames(moldels_importance),each=ncol(moldels_importance))))
+    names(aculoss)<-rep(rownames(moldels_importance),each=ncol(moldels_importance))
+    if(!is.null(sigvars)){
+      pic<-sigvars
+    } else{
+      pic<-which(aculoss>=sig)
+    }
+
+
+   accu_table<-data.frame(matrix(aculoss,nrow=nrow(moldels_importance),dimnames =list(rownames(moldels_importance),colnames(moldels_importance))))
+   if(is.null(sigvars)){
+   col_names<-names(which(apply(accu_table,1,function(x) any( x>=sig))))}else{
+     col_names<-sigvars
+   }
+
+      moldels_importance<-moldels_importance[col_names,,drop=F]
+      aculoss<-unlist(accu_table[col_names,,drop=F])
+  }
+  df<-reshape2::melt(data.frame(id=rownames(moldels_importance),moldels_importance), id=c("id"))
+
+  colnames(df)<-c("variable","model","value")
+  df$acculoss<-aculoss
+
+  if(colby=="models"){
+    col= getcolhabs(newcolhabs,palette,nrow(df))
+
+
+    p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=model))+  scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, ncol(moldels_importance)))
+  } else{
+    p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=acculoss))+scale_fill_gradientn(name=leg,colors=getcolhabs(newcolhabs,palette,100))
+
+
+  }
+
+
+  p<-p + geom_bar(stat = "identity")+coord_flip()
+
+
+
+
+  # Use vars() to supply variables from the dataset:
+  if(isTRUE(facet_grid)){
+    p<-p + facet_grid(cols = vars(model))+xlab(xlab)+ylab(ylab)
+
+  }
+  p<-p+
+    theme(
+      axis.text=element_text(size=cex.axes),
+      axis.title=element_text(size=cex.lab),
+      plot.title=element_text(size=cex.main),
+      strip.text.x=element_text(size=cex.main),
+      legend.text=element_text(size=cex.leg),
+      legend.title=element_text(size=cex.leg))
+  return(p)
+}
+
+
+
 checkData<-function (x, method = c("xts", "zoo", "data.frame", "matrix",
                                    "vector"), na.rm = TRUE, quiet = TRUE, ...)
 {
@@ -1110,10 +2697,10 @@ textintro<-function(...)
         column(12,
                br(),
                h4(strong("Welcome to",span('iMESc',style="font-family: 'Alata', sans-serif;"),style="color: #05668D")),
-               p("This app is intended to dynamically integragate a range of algorithms for data pre-processing, analysis, and visualization. To optimize learning from the data, iMESc allows the adjustment of the analytical parameters of each ML algorithm  by means of a context-aware dynamic interface.  Throughout the app, data input and results output are organized in modules enabling the creation of multiple ML pipelines  . iMESc also offers users classical statistical approaches, such as principal component analysis and non-metric multidimensional scale, calculation of traditional biodiversity indexes and the spatialization of the data on the geographical coordinate plan."),
+               p("iMESc is a shiny-based application that allows the performance of end-to-end machine learning workflows. The available resources meet several needs of environmental workflows, but it is not restricted to. iMESc includes tools for data pre-processing, to perform descriptive statistics, supervised and unsupervised machine learning algorithms and interactive data visualization by means of graphs, maps, and tables. Throughout the app, data input and output are organized in modules enabling the creation of multiple ML pipelines. Additionally, it allows saving the workspace in a single file, contributing to the best practices in data-sharing and analysis reproducibility. The app is entirely written in the R programming language and thus it is free."),
                p("iMESc allows users to create a savepoint, a single R object that can be reloaded later to restore analysis output."),
                p("Get started by creating a Datalist. Use the",icon(verify_fa = FALSE,name=NULL,class="fas fa-plus"),"button."),
-               p("To ensure that iMESc content fits nicely on the screen, we recommend a landscape minimum resolution  of 1377 x 768 pixels. "))
+               p("To ensure that iMESc content fits nicely on the screen, we recommend a landscape", strong("minimum resolution  of 1377 x 768 pixels.")))
 
 
       )
@@ -2549,7 +4136,7 @@ str_numerics2<-function(numerics,obs=NULL, confs=NULL)
 
 #' @export
 str_numerics3<-function(numerics,obs=NULL, pred_interval=NULL,
-                        col.conf="#FCC7C7", col.obs="darkblue", col.pred="#CDCCD9",q_class,col.mean="SeaGreen", cex=2)
+                        col.conf="#FCC7C7", col.obs="darkblue", col.pred="#CDCCD9",q_class,col.mean="SeaGreen", cex=2,pred_ensemble=NULL)
 {
   q_class[,c(1:3)]<-round(q_class[,c(1:3)],5)
 
@@ -2606,7 +4193,8 @@ i=2
       vec=numerics[,i],
       ob=obs[i],
       pred_interval=pred_interval,
-      col.conf=col.conf, col.obs=col.obs, col.pred=col.pred,col.mean=col.mean
+      col.conf=col.conf, col.obs=col.obs, col.pred=col.pred,col.mean=col.mean,
+      pred_ensemble=  if(!is.null(pred_ensemble)){pred_ensemble[i]}
     )
   }
 
@@ -2614,7 +4202,7 @@ i=2
 
 }
 #' @export
-confcurve<-function(vec,ob,pred_interval, col.conf="#FCC7C7", col.obs="darkblue", col.pred="#CDCCD9",col.mean="SeaGreen"){
+confcurve<-function(vec,ob,pred_interval, col.conf="#FCC7C7", col.obs="darkblue", col.pred="#CDCCD9",col.mean="SeaGreen",pred_ensemble=NULL){
 
   confs<-c(pred_interval/2,   1-(pred_interval/2))
 
@@ -2640,7 +4228,12 @@ confcurve<-function(vec,ob,pred_interval, col.conf="#FCC7C7", col.obs="darkblue"
                      col=col.pred, border=NA
   ))
   abline(v=ob, lty=2, col=col.obs, lwd=2)
-  abline(v=mean(vec), lty=2, col=col.mean, lwd=2)
+  if(!is.null(pred_ensemble)){
+    abline(v=pred_ensemble, lty=2, col=col.mean, lwd=2)
+  } else{
+    abline(v=mean(vec), lty=2, col=col.mean, lwd=2)
+  }
+
 
 }
 
@@ -3001,3 +4594,29 @@ plot_ridges<-function(data,fac,palette,newcolhabs){
 
 }
 
+
+textworkflow<-reactive({
+  div(style="padding-top: 15px",
+    p(strong("1. Preparation of the Datalists according to the analytical method")),
+    p(tags$li('For unsupervised methods, only the Numeric Attribute (X) is needed.')),
+    p(tags$li('For classification model, the Numeric-Attribute* (X) and the Factor-Attribute (Y) are needed. X and Y can come from the same Datalist or from different Datalists.')),
+    p(tags$li('For regression models, X and Y are Numeric-Attributes, and therefore different Datalists')),
+    p(em("*For the Naive Bayes Algorithm, Y is always the Factor-Attribute, and X can be either Factor-Attribute or Numeric-Attribute.")),
+
+    p(strong("2. Pre-processing")),
+    p('This section contemplates several tools to prepare the data for the analysis. These tools aims at:'),
+    p(tags$li('Filling the missing values, if any (Data imputation tool)')),
+    p(tags$li('Transforming the data (e.g., scale, center, log), this is particularly recommended for distance-based methods (e.g., PCA, SOM).')),
+    p(tags$li('Partitioning the Y data between training and testing for supervised machine learning methods. This action creates a column in the Factor-Attribute indicating the partitioning.')),
+
+
+    p(strong("3. Save changes and models")),
+    p('Saving data changes or trained models is a recurring step throughout iMESc.'),
+    p('After a transformation, for example, the user should save the changes as a new Datalist or overwrite an existing one. During this process, the Factor, Coords and Shapes attributes (if any) are transferred automatically to the new Datalist. Models previously saved in a Datalist (e.g.: RF-Attribute) are not transferred to the newer version.'),
+    p(strong("Important:"),'The saved trained models are placed in the Datalist used as a predictor (X).'),
+    p('After training the user can save it as a new model or overwrite an existing one. This action creates a new attribute within the Datalist (e.g., RF-Attribute for Random Forest models). A summary table with all saved models in a Datalist can be viewed in the Data Bank menu.'),
+
+    p(strong("4. Download a Savepoint")),
+    p('Save the workspace by creating a Savepoint. This file is a single R object that can be downloaded and reloaded later to restore all the files and analysis outputs.To restore a workspace, upload one or multiple Savepoints at once. When uploading multiple Savepoints, Datalists with the same name in different Savepoints will get a integer suffix.')
+  )
+})

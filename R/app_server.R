@@ -5,17 +5,19 @@
 #' @import shiny
 #' @noRd
 app_server <- function(input, output, session) {
+  ns_tab4 <- NS('hc_tab4')
+  ns_tab5 <- NS('hc_tab5')
+
   once_load<-reactiveValues(df=0)
   insertbmu_tab<-reactiveValues(df=F)
 
   options(shiny.maxRequestSize=100*1024^3)
-  if (
-    # Make sure that {rstudioapi} is available
+  if (    # Make sure that {rstudioapi} is available
     requireNamespace("rstudioapi", quietly = TRUE) &&
     # Returns TRUE if RStudio is running
     rstudioapi::hasFun("viewer")
   ) {
-    options(shiny.launch.browser = .rs.invokeShinyWindowViewer)
+    #options(shiny.launch.browser = .rs.invokeShinyWindowViewer)
   }
 
   aggreg_reac<-reactiveValues(df=0)
@@ -180,6 +182,7 @@ app_server <- function(input, output, session) {
       palname<-names(vals$newcolhabs)[i]
       palette_name<-paste("palette",i)
       outfile <- tempfile(fileext = ".png")
+
       png(outfile, height =70, width=200)
       par(mar=c(0,0,0,0),mai=c(0,0,0,0),mgp=c(0,0,0),oma=c(0,0,0,0),omi=c(0,0,0,0),xpd=T,ann=F, bg=NA, fg=NA)
       colors<-getcolhabs(vals$newcolhabs,names(vals$newcolhabs)[i],1000)
@@ -2077,14 +2080,14 @@ app_server <- function(input, output, session) {
       req(input$var_map)
       pic<-filtermap()
       data<-getdata_map()
+      pic<-1:nrow(data)
       req(input$var_map%in%colnames(data))
       vector<-na.omit(data[,input$var_map])
       my<-pretty(vector)
       if(input$cmap=="discrete"){
         vector<-na.omit(data[pic,input$var_map])
         my<-pretty(vector)
-        my<-my[which(my>min(vector))]
-        my<-my[which(my<max(vector))]}
+      }
       div(
 
         tipify(icon(verify_fa = FALSE,name=NULL,class="fas fa-question-circle",style="color: gray"),"Enter a vector of breaks (comma delimited, within the data range)", options=list(container="body")),
@@ -2347,11 +2350,14 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
            uiOutput("show_z_coords")
     )
   })
+  observeEvent(input$labels_coords,{
+    vals$labels_coords<-input$labels_coords
+  })
   output$show_map_labels<-renderUI({
     req(isTRUE(input$showfactors))
     div(style="padding-left: 15px",
            column(12,' + Factor:',
-                  pickerInput("labels_coords",NULL, choices=colnames( attr(getdata_map(),"factors")),options=list(container="body"), width="75px", inline=T)),
+                  pickerInput("labels_coords",NULL, choices=colnames( attr(getdata_map(),"factors")),options=list(container="body"), width="75px", inline=T, selected=vals$labels_coords)),
            #
 
            column(12,class="palette",' + Color:',
@@ -2471,6 +2477,7 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
       inline(div(style="margin-top:10px",uiOutput("stack_map", inline=T))),
       inline(div(style="margin-top:10px",uiOutput("trash_map", inline=T))),
       bsButton('downp_map',tipify(icon(verify_fa = FALSE,name=NULL,class="fas fa-download"),"Download plot"), style="button_active"),
+      actionLink('down_disc_loop',"*download loop", style="button_active"),
       inline(uiOutput("down_raster_btn")),
       inline(div(style="margin-top:10px",uiOutput("stop_map", inline=T))),
 
@@ -2488,6 +2495,10 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
   observeEvent(input$down_maps_loop,{
     map_raster_loop()
   })
+  observeEvent(input$down_disc_loop,{
+    map_discfac_loop()
+  })
+
 
   map_raster_loop<-reactive({
     datao<-data<-vals$saved_data[[input$data_map]]
@@ -2555,8 +2566,7 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
         attr(p,"my_rst")<-my_rst
         attr(p,"data_z")<-attr(p0,"data_z")
         vals$map_res<-p
-        # path<-'D:/OneDrive/PÓS-DOC/Articles/MS_meiofauna/Figuras_MS_Fabi/Rasters/'
-        #saveRDS(my_rst,paste0(path,get,".rds"))
+
 
         file<-paste0(get,if(input$var_map_filter1!="None"){paste("-",input$var_map_filter1,input$var_map_filter2)})
 
@@ -2567,7 +2577,7 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
         graphics.off()
         Sys.sleep(0.5)
 
-        png(paste0(file,".png"), height=vals$cur_fheight, width=vals$cur_fwidth, pointsize = vals$cur_pointsize, units="cm",res=300)
+        png(paste0(file,".png"), height=vals$cur_fheight, width=vals$cur_fwidth, pointsize = vals$cur_pointsize, units="cm",res=300,type ="cairo-png")
 
         plot(vals$map_res)
         graphics.off()
@@ -2586,6 +2596,92 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
 
   })
 
+  map_discfac_loop<-reactive({
+    datao<-data<-attr(vals$saved_data[[input$data_map]],"factors")
+    withProgress(max=ncol(data),message="Running",{
+
+      col_names<-colnames(datao)
+      if(input$var_map_filter1!="None"){
+        col_names<-col_names[-c(1:2)]
+      }
+
+      for(i in 1:ncol(data)) {
+
+        data <- attr(getdata_map(),"factors")[filtermap(),,drop=F]
+        coords<-attr(getdata_map(),"coords")[rownames(data),]
+        get<-col_names[i]
+        cat("\n",get)
+        col=input$pt_palette
+
+        req(get%in%colnames(data))
+        file<-paste0(as.character(get),if(input$var_map_filter1!="None"){paste("-",input$var_map_filter1,input$var_map_filter2)})
+
+        p<-suppressWarnings(
+          map_discrete_variable(
+            data = data,
+            coords = coords,
+            base_shape =if(isTRUE(input$map_1a_base)){attr(getdata_map(),"base_shape") } else { NULL},
+            layer_shape =if(isTRUE(input$map_1f_layer)){attr(getdata_map(),"layer_shape") } else { NULL},
+            get = get,
+            main = file,
+            factors=labcoords(),
+            showcoords=input$showcoords,
+            cex.pt = input$pt_points+6,
+            cexmin.pt=input$pt_points_min,
+            cex.coords=input$pt_coords+1,
+            cex.fac=input$pt_factor+2,
+            col.fac=input$col_factor,
+            cex.axes=input$pt_legend,
+            cex.lab=input$pt_legend,
+            cex.leg=input$cex.key,
+            leg="",
+            col.coords=if(length(input$col_coords)>0){   getcolhabs(vals$newcolhabs,input$col_coords,5)[1] } else{ NULL},
+            col.palette=col,
+            symbol=as.numeric(input$pt_symbol),
+            scalesize_size= F,
+            scalesize_color=F,
+            points=T, input$pt_factor+6,
+            as_factor=F,
+            bmu=F,
+            colored_by_factor=attr(getdata_map(),"factors")[as.character(get)][filtermap(),, drop=F],
+            showguides=input$showguides,
+            limits=as.matrix( cbind(
+              c(input$long_xmin,  input$lat_xmin),
+              c(input$long_xmax,  input$lat_xmax)
+            )),
+            layer_col=getcolhabs(vals$newcolhabs,input$layer_col,1),
+            lighten=input$layer_lighten,
+            base_col=getcolhabs(vals$newcolhabs,input$base_col,1),
+            base_lighten=input$base_lighten,
+            newcolhabs=vals$newcolhabs,
+            extralayers=extralayers(),
+            data_depth=input$data_depth,
+            layer_shape_border=getcolhabs(vals$newcolhabs,input$layer_col_border,1),
+            base_shape_border= getcolhabs(vals$newcolhabs,input$base_col_border,1),
+            cex.main=input$pt_titlemap,
+            key.height=input$key.height,
+            keyscale=input$keyscale,  width_hint=input$scabarsize,cex_scabar=input$scabartextsize
+          )
+        )
+
+
+
+
+
+
+        Sys.sleep(0.5)
+        png(paste0(file,".png"), height=vals$cur_fheight, width=vals$cur_fwidth, pointsize = vals$cur_pointsize, units="cm",res=300,type ="cairo-png")
+        plot(p)
+        graphics.off()
+        incProgress(1)
+        Sys.sleep(0.5)
+        vals$map_res<-NULL
+      }
+    })
+
+  })
+
+  map_disc_loop <- reactive({})
 
   output$down_raster <- downloadHandler(
     filename = "raster.tif",
@@ -2654,7 +2750,6 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
 
 
   observeEvent(input$gomap,{
-
     vals$gomap<-T
     if(isTRUE(vals$stopmap)){
       vals$stopmap<-F
@@ -2936,39 +3031,88 @@ req(input$mantel_cutoff)
     plot(vals$correlog,input$mantel_alpha, xlab="Distance class (m)")
     mantel_plot$df<-recordPlot()
   })
-  output$package_refs<-renderPrint({
+  output$package_refs<-renderUI({
+    list.of.packages<-c('aweSOM','base64enc','beepr','processx','caret','golem','cicerone','class','cluster','colorRamps','colorspace','colourpicker','data.table','DBI','dendextend','DT','e1071','factoextra','gbm','geodist','ggplot2','ggpubr','ggrepel','ggridges','ggthemes','gplots','gstat','imputeMissings','kernlab','klaR','kohonen','lattice','Metrics','pdp','plot3D','purrr','randomForestExplainer','raster','RColorBrewer','readxl','rgl','rintrojs','rstudioapi','scales','segRDA','sf','shiny','shinyBS','shinybusy','shinycssloaders','shinydashboard','shinydashboardPlus','shinyjqui','shinyjs','shinyTree','shinyWidgets','sortable','sp','stringr','subniche','vegan','viridisLite','wesanderson','writexl')
 
-    packlist<-list()
-    for(i in 1:length(list.of.packages))
-    {
-      pack<-list.of.packages[i]
-      a<-citation(pack)
-      b<-gsub("\n\nA..*","",format(a)[2])
-      c<-gsub(".*\n\n","",b)
-      d<-gsub("\n","",c)
-      packlist[i]<-d
-    }
-    packlist
+    pkgs<-list.of.packages
+    citations <- do.call('c',lapply(pkgs, citation))
+    x<-citations[[1]]
+
+
+    citations<- lapply(citations,function(x){
+      format(x, style = "html")
+      })
+
+
+
+    div(style="padding-top: 20px",
+      HTML(paste0(citations))
+    )
 
   })
 
+  is_unsupmenu<-function(x){
+    x%in%c("menu_som","menu_hc",'menu_kmeans')
+  }
+  is_supmenu<-function(x){
+    x%in%c("menu_rf","menu_nb",'menu_svm','menu_knn','menu_sgboost','menu_som2')
+  }
+  is_toolmenu<-function(x){
+    x%in%c('menu_intro','menu_upload','menu_explore','menu_maps','menu_div','menu_comp')
+  }
 
+  observeEvent(input$tabs,{
+    #req(is.null(vals$goup))
+    vals$cur_tab<-input$tabs
+  }, priority=0)
 
 
   observeEvent(input$tabs,{
-
-    if(input$tabs%in%c("menu_rf","menu_nb",'menu_svm','menu_knn','menu_sgboost','menu_som2')){
+    if(is_supmenu(input$tabs)){
       vals$cur_sup_menu<-input$tabs
-    } else  if(input$tabs%in%c("menu_som",'menu_hc','menu_kmeans')){
+      vals$goup<-T
+    } else  if(is_unsupmenu(input$tabs)){
       vals$cur_unsup_menu<-input$tabs
-    } else if(input$tabs%in%c('menu_intro','menu_upload','menu_explore','menu_maps','menu_div','menu_comp')){
-
+      vals$goup<-T
+    } else if(is_toolmenu(input$tabs)){
      shinyjs::hide(selector = "ul.menu-open")
       runjs("Shiny.setInputValue('sidebarItemExpanded', null);")
       updateTextInput(session, "sidebarItemExpanded", value = NULL)
-
+      vals$goup<-NULL
     }
+  },priority=2)
+
+
+  observeEvent(input$sidebarItemExpanded,{
+
+    if(is.null(vals$cur_sup_menu)){
+      vals$cur_sup_menu<-"menu_nb"
+    }
+    if(is.null(vals$cur_unsup_menu)){
+      vals$cur_unsup_menu<-"menu_som"
+    }
+    if(!is.null(input$sidebarItemExpanded))
+      if(input$sidebarItemExpanded%in%"unsup_expand"){
+        vals$cur_tab<-vals$cur_unsup_menu
+        vals$goup<-"go"
+      } else if(input$sidebarItemExpanded%in%"sup_expand") {
+        vals$cur_tab<-vals$cur_sup_menu
+        vals$goup<-"go"
+      }
+
+
+  }
+  , priority=3)
+
+  observeEvent(vals$goup,{
+    req(vals$goup=="go")
+    updateTabItems(session, "tabs", selected = vals$cur_tab)
+    vals$goup<-NULL
   })
+
+
+
+
 
   observe({
 
@@ -3000,26 +3144,6 @@ req(input$mantel_cutoff)
         }
     })
   })
-
-
-
-  observeEvent(input$sidebarItemExpanded,{
-    req(!is.null(input$sidebarItemExpanded))
-    if(is.null(vals$cur_sup_menu)){
-      vals$cur_sup_menu<-"menu_nb"
-    }
-    if(is.null(vals$cur_unsup_menu)){
-      vals$cur_unsup_menu<-"menu_som"
-    }
-    if(input$sidebarItemExpanded=="unsup_expand"){
-      updateTextInput(session, "tabs", value = vals$cur_unsup_menu)
-    } else{
-      updateTextInput(session, "tabs", value = vals$cur_sup_menu)
-    }
-
-  })
-
-
 
 
   gettitle2<-function(x) {
@@ -3486,16 +3610,18 @@ if(is.null(menu_steps$anext)&is.null(menu_steps$prev)){
     )
   })
   output$na_methods<-renderUI({
-    pickerInput("na_method", span("Method",actionLink("na_help",icon(verify_fa = FALSE,name=NULL,class="fas fa-question-circle"), type="toggle")),c("median/mode","knn","bagImpute","medianImpute"), width="120px")
+    pickerInput("na_method", span("Method",actionLink("na_help",icon(verify_fa = FALSE,name=NULL,class="fas fa-question-circle"), type="toggle")),c("median/mode","Knn","bagImpute","medianImpute","missForest","mice"), width="120px")
   })
   observeEvent(input$na_targ,{
     choices=if(input$na_targ=="Numeric-Attribute"){
-      c("median/mode","Knn","bagImpute","medianImpute")
+      c("median/mode","Knn","bagImpute","medianImpute","missForest","mice")
     } else{
       c("median/mode")
     }
     updateSelectInput(session,'na_method', choices=choices)
   })
+
+
   output$imputation_help<-renderUI({
     hidden(
       column(12, id="na_help_text", style="background: white; white-space: normal;",
@@ -3716,7 +3842,7 @@ if(is.null(menu_steps$anext)&is.null(menu_steps$prev)){
     names(attr(vals$saved_data[[input$editmodel_targ]],input$editmodel_at))<- vals$oldmodelsnames[,1]
     vals$cur_data<-input$editmodel_targ
     vals$oldmodelsnames<-NULL
-    removeModal()
+    #removeModal()
   })
 
 
@@ -4322,7 +4448,7 @@ output$newfactors_page<-renderUI({
 
 
   observeEvent(input$editdat_go,{
-    removeModal()
+
     newdf<-attr(delcol_values$tab,'data')
     if(input$editattr=="Factors"){
       attr(vals$saved_data[[input$editdata]],"factors")<-newdf
@@ -4334,19 +4460,44 @@ output$newfactors_page<-renderUI({
 
 
 
+output$del_datalist_choices<-renderUser({
+  div(
+    div(style="overflow-y: scroll;height: 400px;overflow-x: scroll; padding-top: 10px",
+        checkboxGroupInput('del_datalist',NULL,names(vals$saved_data),width='550px')
+    )
+  )
+})
 
+  output$removedatalist_out<-renderUI({
+    div(
+      div(checkboxInput("checkall_datlist",strong('Select/Unselect all'),F),
+          uiOutput("del_datalist_choices")
+      )
+    )
 
+  })
+  observeEvent(input$checkall_datlist,{
+    if(isTRUE(input$checkall_datlist)){
+      updateCheckboxGroupInput(session,
+                               "del_datalist",NULL,
+                               choices = names(vals$saved_data),
+                               selected = names(vals$saved_data)
+      )
+    } else{
+      updateCheckboxGroupInput(session,
+                               "del_datalist",NULL,
+                               choices = names(vals$saved_data)
+
+      )
+    }
+
+  })
 
   observeEvent(input$dcogs7,{
     showModal(
       modalDialog(size="m",easyClose = T,
                   title=strong("Remove Datalists"),
-                  div(
-                    div(
-                        div(style="overflow-y: scroll;height: 150px;overflow-x: scroll; padding-top: 10px",
-                            checkboxGroupInput('delete_picker',NULL,names(vals$saved_data),width='550px')
-                        )
-                    ),
+                  div(uiOutput("removedatalist_out"),
                     bsButton("delete_datalist",icon=icon(verify_fa = FALSE,name=NULL,class="far fa-trash-alt"),"Delete", style="button_active", block=T, value=F)
                   )
       )
@@ -5322,27 +5473,7 @@ output$newfactors_page<-renderUI({
     showModal(
       hand_save_modal()
     )})
-  output$viewfactors<-renderUI({
 
-    div(style="overflow-x: scroll;",
-        div(class="datalist_tools",h5(
-          span(strong("Factor-Attribute")),
-          actionButton("dfcogs2",tipify(icon(verify_fa = FALSE,name=NULL,class="fas fa-download"),"Download table")), tipify(actionButton("replace_factors",icon(verify_fa = FALSE,name=NULL,class="fas fa-file-upload")),"Replace Factor-Attribute")
-        )),
-        div(
-          tags$style('#x1_factors td {padding: 3px;
-                     text-align: left;
-                     font-size:12px}'),
-          tags$style('#x1_factors th {padding: 3px;
-                     text-align: left;
-                     font-size:12px}'),
-
-          inline(
-            DT::dataTableOutput("x1_factors")
-          )
-        )
-    )
-  })
   observeEvent(input$dcogs5,{
     showModal(
       modalDialog(
@@ -5409,16 +5540,16 @@ output$newfactors_page<-renderUI({
     pickerInput("newfac_targ","1. Select the target Datalist:",names(vals$saved_data), selected=vals$cur_data)
   })
   output$confirm_newfac<-renderUI({
-    req(length(vals$newfactors_att)>0)
+    #req(length(vals$newfactors_att)>0)
     actionButton('newfac_confirm',strong("3. Confirm"))
   })
   observeEvent(input$newfac_confirm,{
-    req(!is.null(vals$newfactors_att))
+    #req(!is.null(vals$newfactors_att))
     newfac<-vals$newfactors_att
     attr(vals$saved_data[[input$newfac_targ]],"factors")<-newfac
     runjs("Shiny.setInputValue('newfactorfile', null);")
-    removeModal()
-    vals$newfactors_att<-NULL
+    vals$cur_data<-input$newfac_targ
+    #vals$newfactors_att<-NULL
 
   })
   observeEvent(input$newfactorfile,{
@@ -5545,7 +5676,7 @@ output$newfactors_page<-renderUI({
     }
 
   })
-  output$DTcoords<-DT::renderDataTable(data.frame(attr(getdata_bank(),"coords")),options = list(pageLength = 20, info = FALSE,lengthMenu = list(c(20, -1), c( "20","All")), autoWidth=T,dom = 'lt'), rownames = TRUE,class ='cell-border compact stripe')
+  output$DTcoords<-DT::renderDataTable(data.frame(attr(getdata_bank(),"coords")),options = list(pageLength = 15, info = FALSE,lengthMenu = list(c(15, -1), c( "15","All")), autoWidth=T,dom = 'lt',scrollX = TRUE, scrollY = "400px"), rownames = TRUE,class ='cell-border compact stripe')
   output$viewbase<-renderUI({
     req(input$pick_elayers)
     req(input$pick_elayers=="Base Shape")
@@ -5616,14 +5747,15 @@ output$newfactors_page<-renderUI({
   })
 
   observeEvent(input$delete_datalist,{
-    pic<-which(names(vals$saved_data)%in%input$delete_picker)
+    req(length(input$del_datalist)>0)
+    pic<-which(names(vals$saved_data)%in%input$del_datalist)
     vals$saved_data<-vals$saved_data[-pic]
     removeModal()
   })
   output$view_out<-renderUI({
     req(input$view_datalist)
     column(12,id="view_out",
-           div(style="margin-top: 20px;overflow-x: scroll;",
+           div(style="margin-top: 20px;",
                switch(input$view_datalist,
                       'data'= uiOutput("viewdata"),
                       'factors'=uiOutput("viewfactors"),
@@ -5675,6 +5807,7 @@ output$newfactors_page<-renderUI({
   output$comment_data<-renderUI({
     HTML(attr(vals$saved_data[[input$data_bank]],"notes"))
   })
+
 
   output$comments_edit<-renderUI({
     actionButton("comments_edit",icon(verify_fa = FALSE,name=NULL,class="fas fa-edit"))
@@ -5817,7 +5950,7 @@ output$newfactors_page<-renderUI({
                         container =container,
                         options=list(lengthMenu = list(c(-1), c("All")),
                           rownames=T,
-                          info=FALSE,autoWidth=T,dom = 't')),
+                          info=FALSE,autoWidth=T,dom = 't',scrollX = TRUE, scrollY = "400px")),
           c(1), `border-left` = "solid 1px"
         ),       c(ncol_base,ncol(table)), `border-right` = "solid 1px"
       )
@@ -5836,7 +5969,7 @@ output$newfactors_page<-renderUI({
                         container =container,
                         options=list(lengthMenu = list(c(-1), c("All")),
                           rownames=T,
-                          info=FALSE,autoWidth=T,dom = 't')),
+                          info=FALSE,autoWidth=T,dom = 't',scrollX = TRUE, scrollY = "400px")),
           c(1), `border-left` = "solid 1px"
         ),       c(9,13), `border-right` = "solid 1px"
       )
@@ -6377,7 +6510,7 @@ output$newfactors_page<-renderUI({
     mod_downcenter <- callModule(module_server_downcenter, "downcenter",  vals=vals)
   })
 
-  output$x1_factors = {DT::renderDataTable(attr(getdata_bank(),"factors"),options = list(pageLength = 20, info = FALSE,lengthMenu = list(c(20, -1), c( "20","All")), autoWidth=T), rownames = TRUE,class ='cell-border compact stripe')}
+
   observeEvent(input$delete_coords,{
     showModal(
       modalDialog(
@@ -6572,23 +6705,91 @@ output$newfactors_page<-renderUI({
   output$data_attr<-renderUI({
     validate(need(ncol(getdata_bank())<1000,"Preview not available for data with more than 1000 columns"))
     div(
-
-      tags$style('#DT_data td {padding: 3px;
-                     text-align: left;
-                     font-size:12px}'),
-      tags$style('#DT_data th {padding: 3px;
-                     text-align: left;
-                     font-size:12px}'),
-      inline(
-        DT::dataTableOutput("DT_data")
-      )
+      DT::dataTableOutput("DT_data")
     )
     #screenshot(scale=3, timer=2)
 
   })
-  output$DT_data<-DT::renderDataTable(getdata_bank(),options = list(pageLength = 20, info = FALSE,lengthMenu = list(c(20, -1), c( "20","All")), autoWidth=T), rownames = TRUE,class ='cell-border compact stripe')
 
 
+  getdata_bank<-reactive({
+    req(length(vals$saved_data)>0)
+    req(input$data_bank)
+    vals$saved_data[[input$data_bank]]
+    })
+
+
+  output$DT_data<-DT::renderDataTable(
+    getdata_bank(),
+    extensions = c('FixedColumns',"FixedHeader"),
+    options = list(
+    pageLength = 15,
+    info = FALSE,
+    lengthMenu = list(c(15, -1), c( "15","All")),
+    autoWidth=F,
+    scrollX = TRUE,
+    scrollY = "400px",
+    fixedHeader=TRUE,
+    fixedColumns = list(leftColumns = 1, rightColumns = 0)),
+    rownames = TRUE,
+    class ='cell-border compact stripe',
+    editable=T)
+
+
+  observeEvent(input$DT_data_cell_edit, {
+    row  <- input$DT_data_cell_edit$row
+    clmn <- input$DT_data_cell_edit$col
+    value<-if(input$DT_data_cell_edit$value==""){NA}else{as.numeric(input$DT_data_cell_edit$value)}
+    vals$saved_data[[input$data_bank]][row, clmn] <- value
+  })
+
+
+  observeEvent(input$DT_factors_cell_edit, {
+    factors<-attr(vals$saved_data[[input$data_bank]],"factors")
+    row  <- input$DT_factors_cell_edit$row
+    clmn <- input$DT_factors_cell_edit$col
+    value<-input$DT_factors_cell_edit$value
+    if(!value%in%levels(factors[,clmn])){
+      levels(factors[,clmn])<-c(levels(factors[,clmn]), value)
+      factors[row, clmn]<-value
+      attr(vals$saved_data[[input$data_bank]],"factors")<-factors
+
+    } else{
+      attr(vals$saved_data[[input$data_bank]],"factors")[row, clmn] <- input$DT_factors_cell_edit$value
+    }
+
+  })
+
+
+
+  output$viewfactors<-renderUI({
+
+    div(
+      div(class="datalist_tools",h5(
+        span(strong("Factor-Attribute")),
+        actionButton("dfcogs2",tipify(icon(verify_fa = FALSE,name=NULL,class="fas fa-download"),"Download table")), tipify(actionButton("replace_factors",icon(verify_fa = FALSE,name=NULL,class="fas fa-file-upload")),"Replace Factor-Attribute")
+      )),
+
+      column(12,style=" background: white;",
+             uiOutput("factor_attr")
+      )
+
+    )
+
+
+  })
+
+  output$factor_attr<-renderUI({
+    validate(need(ncol(attr(getdata_bank(),"factors"))<1000,"Preview not available for data with more than 1000 columns"))
+    div(
+      DT::dataTableOutput("DT_factors")
+    )
+    #screenshot(scale=3, timer=2)
+
+  })
+
+
+  output$DT_factors<-DT::renderDataTable(attr(getdata_bank(),"factors"),options = list(pageLength = 15,lengthMenu = list(c(15, -1), c( "15","All")), autoWidth=F,scrollX = TRUE, scrollY = "400px"), rownames = TRUE,class ='cell-border compact stripe', editable=T)
 
 
   observeEvent(input$tools_save_changes,{
@@ -6639,7 +6840,9 @@ output$newfactors_page<-renderUI({
     if(input$lastkeypresscode == 27){ removeModal()}
   })
   observeEvent(input$data_confirm,{
+
     gosave$df<-1
+
   })
   observe({
     req(isTRUE(gosave$modal))
@@ -6738,7 +6941,7 @@ output$newfactors_page<-renderUI({
 
 
       vals$hand_save<-NULL
-
+      vals$hand_save3<-NULL
 
     }
 
@@ -6811,16 +7014,9 @@ output$newfactors_page<-renderUI({
   bag_agg<-reactive({
     bag<-1
     name0<-paste0(input$data_upload,"_",input$spread_measures)
-    name1<-paste0(name0," (",bag,")")
-    if(name1%in%names(vals$saved_data))
-    {
-      repeat{
-        bag<-bag+1
-        name1<-paste0(name0," (",bag,")")
-        if(!name1%in%names(vals$saved_data)) break
-      }
-    }
-    paste0(name0," (",bag,")")
+    name1<-make.unique(c(names(vals$saved_data),name0), sep="_")
+    name1[length(vals$saved_data)+1]
+
 
   })
   bag_extralayer<-reactive({
@@ -7036,6 +7232,7 @@ output$newfactors_page<-renderUI({
       }
   })
   saveagg<-reactive({
+    curdata<-input$data_upload
     temp<-vals$agg
     factors<-attr(temp,"factors")
     coords<-attr(temp,"coords")
@@ -7086,35 +7283,13 @@ output$newfactors_page<-renderUI({
     }
     vals$agg<-NULL
     status_changes$df<-c(T,T)
+    vals$cur_data<-curdata
     updateRadioGroupButtons(session,"radio_cogs",selected=last_btn$equal[1])
     runjs(paste0("Shiny.setInputValue('radio_cogs', ",last_btn$equal[1],");"))
 
 
   })
-  savemapcode<-reactive({
-    hc <- phc()
-    data<-vals$saved_data[[input$data_mapcode]]
-    somC<-cutsom.reactive()
-    pred<-mapcode()
-    hcut<-somC$som.hc
-    newclass<-pred$unit.classif
-    for(i in 1:length(hcut)) {newclass[newclass==i]<-rep(hcut[i],sum(  newclass==i))}
 
-
-    names(newclass)<-rownames(data)
-
-    temp <- newclass
-
-    if(input$hand_save=="create"){
-      attr(vals$saved_data[[input$data_mapcode]],"factors")[names(temp),input$mc_newname]<-as.factor(temp)
-    } else{
-      attr(vals$saved_data[[input$data_mapcode]],"factors")[input$mc_over]<-as.factor(temp)
-    }
-
-
-
-
-  })
   saveclusters<-reactive({
     vals$baghc0<-vals$baghc0+1
     hc <- phc()
@@ -7124,9 +7299,6 @@ output$newfactors_page<-renderUI({
     } else{
       attr(vals$saved_data[[input$data_hc]],"factors")[input$hc_over]<-as.factor(temp)
     }
-
-
-
 
   })
   modal_dialog<-function(){
@@ -7154,38 +7326,24 @@ output$newfactors_page<-renderUI({
     paste("Div_results",bag)
 
   })
+
   bag_mp<-reactive({
-    somC<-cutsom.reactive()
-    bag<-somC$groups
-    name0<-paste("HC")
-    name1<-paste(name0,bag)
-    if(name1%in%colnames(attr(vals$saved_data[[input$data_mapcode]],"factors")))
-    {
-      repeat{
-        bag<-bag+1
-        name1<-paste(name0,bag)
-        if(!name1%in%colnames(attr(vals$saved_data[[input$data_mapcode]],"factors"))) break
+
+    args<-vals[[ns_tab5("somplot_args")]]
+    name0<-paste0('HC',vals$customKdata)
+    if(length(input$fixname)>0){
+      if(isTRUE(input$fixname)){
+        name0<-paste0(input$data_hc,'_HC', args$newdata)
       }
     }
-    paste("HC",bag)
+
+    data<-attr(vals$saved_data[[args$newdata]],"factors")
+    name1<-make.unique(c(colnames(data),name0), sep="_")
+    name1[ncol(data)+1]
+
 
   })
-  bag_hc<-reactive({
 
-    bag<-input$customKdata
-    name0<-paste("HC")
-    name1<-paste(name0,bag)
-    if(name1%in%colnames(attr(vals$saved_data[[input$data_hc]],"factors")))
-    {
-      repeat{
-        bag<-bag+1
-        name1<-paste(name0,bag)
-        if(!name1%in%colnames(attr(vals$saved_data[[input$data_hc]],"factors"))) break
-      }
-    }
-    paste("HC",bag)
-
-  })
   output$nointerpsmodel<-renderPrint(
     cat("no saved map to overwritte")
   )
@@ -7653,10 +7811,6 @@ output$newfactors_page<-renderUI({
       position(1)
       menu_steps$cur<-NULL})
 
-  })
-
-  observeEvent(input$tabs,{
-    vals$cur_tab<-input$tabs
   })
 
 
@@ -8306,6 +8460,8 @@ output$newfactors_page<-renderUI({
     remove_IDs<-which(rowSums(is.na(data))==ncol(data))
     if(length(remove_IDs)>0){
       data<-data[-remove_IDs,]}
+
+
     data
   })
 
@@ -8371,76 +8527,71 @@ output$newfactors_page<-renderUI({
                newcolhabs=vals$newcolhabs)
     somC
   })
-  phc <- reactive({
 
+
+  getnew_levels<-reactive({
+    unlist(lapply(levels(hc$somC), function(x) input[[paste0("custom_lev",x)]]))
+  })
+
+  observeEvent(input$teste_comb,{
+    saveRDS(reactiveValuesToList(vals),"savepoint.rds")
+    saveRDS(reactiveValuesToList(input),"input.rds")
+    beep()
+    #vals<-readRDS("vals.rds")
+    #input<-readRDS('input.rds')
+  })
+
+
+  output$custom_levels_old<-renderUI({
+
+    hc<-phc()
+
+
+    #vals<-readRDS("savepoint.rds")
+    #somC<- vals$get_hc
+    #pclus(somC, newcolhabs = vals$newcolhabs)
+    cols<-vals$newcolhabs[[input$hcdata_palette]]( nlevels(hc$somC))
+    names(cols)<-levels(hc$somC)
+    lapply(levels(hc$somC),function(x){
+      div(
+        inline(div(style=paste0(style="background:", cols[x],"; height: 20px; width: 20px;"))),
+        strong(x),
+        inline(textInput(paste0("custom_lev",x), NULL, value =  x, width="150px"))
+      )
+    })
+
+
+  })
+  phc <- reactive({
     req(input$model_or_data)
     req(input$method.hc0)
     if (input$model_or_data == "som codebook") {
-      somC <- cutsom.reactive()
+      hc <- cutsom.reactive()
     } else if (input$model_or_data == "data") {
-      somC <- cutdata.reactive()
+      hc <- cutdata.reactive()
     }
-    somC
+    hc$som.hc<-factor(hc$som.hc)
+    hc$somC<-factor( hc$somC)
+    hc
   })
   getmodel_hc <- reactive({
     req(input$data_hc)
     req(input$som_hc)
-
-    attr(getdata_hc(),"som")[[as.character(input$som_hc)]]
+    data<-getdata_hc()
+    m<-attr(data,"som")[[as.character(input$som_hc)]]
+    m
   })
-
-
-  pclus_factors<- reactive({
-    if (length(input$pclus_factors)>0) {
-      if(input$pclus_factors=="rownames"){
+  pclus_points_factor<- reactive({
+    if (length(input$pclus_points_factor)>0) {
+      if(input$pclus_points_factor=="rownames"){
         rownames(getdata_hc())
       } else{
-        as.factor(attr(getdata_hc(),"factors")[rownames(getdata_hc()), input$pclus_factors])
+        as.factor(attr(getdata_hc(),"factors")[rownames(getdata_hc()), input$pclus_points_factor])
       }
 
     } else{NULL}
   })
-  output$pclus_code<-renderPlot({
-    req(input$pclus_facpalette)
 
-
-
-    npic<-NULL
-    indicate<-NULL
-    if(isTRUE(input$varfacmap_action)){
-
-      npic<- input$npic
-      indicate<- input$vfm_type
-    }
-    pclus(
-      somC=cutsom.reactive(),
-      cex = as.numeric(input$pclus_symbol_size),
-      factor.pal = as.character(input$pclus_facpalette),
-      labels.ind = pclus_factors(),
-      pch=as.numeric(input$pclus_symbol),
-      points=bmu_clus_points(),
-      bg_palette=input$hcdata_palette,
-      ncol=input$ncol_pclus,
-      insetx=input$insertx_pclus,
-      insety=input$inserty_pclus,
-      alpha.legend=input$bgleg_pclus,
-      newcolhabs=vals$newcolhabs,
-      bgalpha=input$somcut_bgalpha,
-      npic = npic,
-      indicate = indicate,
-      cex.var=input$pclus.cex.var,
-      col.text=input$p.clus.col.text,
-      col.bg.var=input$pclus.col.bg.var,
-      col.bg.var.alpha= input$p.clus.col.bg.var.alpha
-
-
-
-
-    )
-
-
-    vals$hc_tab4_plot<-recordPlot()
-  })
 
   # pred<-attr(vals$saved_data[[input$data_map]],"predictions")
   #d<-if(length(pred)>0){"predictions"} else {NULL}
@@ -8541,15 +8692,17 @@ output$newfactors_page<-renderUI({
 
     colored_by_factor<-
       if(isTRUE(input$colored_map)){
-        attr(data,"factors")[as.character(input$map_lab)]
+        attr(data,"factors")[filtermap(),as.character(input$map_lab),drop=F]
 
       } else {NULL}
     req(input$breaks_map)
     if(!isTRUE(input$stack_scatter_3d)){
       mybreaks<-as.numeric(unlist(strsplit(input$breaks_map,",")))
-      validate(need(min(mybreaks)>=min(data[,get])&max(mybreaks)<=max(data[,get]),paste0("Breaks must be within the data range (","min: ",min(data[,get]),"; max: ",max(data[,get]),")")))}else{
+    }else{
         mybreaks<-NULL
       }
+
+
 
     m<-
       map_discrete_variable(
@@ -9102,233 +9255,8 @@ output$newfactors_page<-renderUI({
 
   })
 
-  observeEvent(input$dot_label_clus,{
-    vals$dot_label_clus<-input$dot_label_clus
-  })
-  output$somcut_display<-renderUI({
-    div(span("+ Display:",inline(
-      radioButtons(
-        "dot_label_clus", NULL, choices = c("labels", "symbols"), inline=T, width="100px", selected=vals$dot_label_clus)
-    )))
-  })
-  observeEvent(input$pclus_facpalette,{
-    vals$pclus_facpalette<-input$pclus_facpalette
-  })
-  output$somcut_obscol<-renderUI({
-    req(input$hc_tab=='hc_tab4')
-    if(is.null(vals$pclus_facpalette)){vals$pclus_facpalette<-vals$colors_img$val[2]}
-    div(span("+ Obs color",inline(
-      tipify(pickerInput(inputId = "pclus_facpalette",
-                         label =NULL,
-                         choices = vals$colors_img$val,
-                         choicesOpt = list(content = vals$colors_img$img),
-                         selected=vals$pclus_facpalette,
-                         options=list(container="body"), width="75px"),
-             "Symbol colors. Choose a gradient to color observations by a factor"
-      )
-    )))
-  })
-  observeEvent(input$pclus_symbol_size,{
-    vals$pclus_symbol_size<-input$pclus_symbol_size
-  })
-  output$somcut_symbsize<-renderUI({
-    if(is.null(vals$pclus_symbol_size)){vals$pclus_symbol_size<-1}
-    div(span(
-      "+ size",inline(
-        tipify(numericInput("pclus_symbol_size",NULL,value = vals$pclus_symbol_size,min = 0.1,max = 3,step = .1, width="100px"),"symbol size")
-      )
-    ))
-  })
-  observeEvent(input$pclus_symbol,{
-    vals$pclus_symbol<-input$pclus_symbol
-  })
-  output$somcut_shape<-renderUI({
-
-    req(input$dot_label_clus=='symbols')
-    div(span("+ Shape",
-             tipify(pickerInput(inputId = "pclus_symbol",
-                                label = NULL,
-                                choices = df_symbol$val,
-                                choicesOpt = list(content = df_symbol$img),
-                                options=list(container="body"), width="100px",
-                                selected=vals$pclus_symbol)
-                    ,"symbol shape")))
-  })
-  output$hc_side4<-renderUI({
-    req(input$hc_tab=='hc_tab4')
-    div(class="map_control_style",style="color: #05668D",
-        div(
-          uiOutput("somcut_display"),
-          uiOutput("somcut_obscol"),
-          uiOutput("pclus_fac_control"),
-          uiOutput("vfm_check"),
-          uiOutput("varfac_out"),
-          uiOutput("somcut_bgalpha"),
-          uiOutput("somcut_symbsize"),
-          uiOutput("somcut_shape"),
-          uiOutput('pclus_legcontrol'),
-          actionLink('create_codebook',"+ Create Datalist with the Codebook and HC class")
 
 
-        ))
-  })
-  observeEvent(input$somcut_bgalpha,vals$somcut_bgalpha<-input$somcut_bgalpha)
-  output$vfm_check<-renderUI({
-    if(is.null(vals$pclus_varfacmap_action)){vals$pclus_varfacmap_action<-F}
-    div(
-      span("+ ",
-           inline(checkboxInput("varfacmap_action", span("Variable factor map",actionLink("varfacmap", tipify(icon(verify_fa = FALSE,name=NULL,class="fas fa-question-circle"), "Click for more details"))),value =vals$pclus_varfacmap_action, width="100px")))
-    )
-  })
-  observeEvent(input$varfacmap_action,{
-    vals$pclus_varfacmap_action<-input$varfacmap_action
-  })
-
-
-  output$varfac_out<-renderUI({
-    req(isTRUE(input$varfacmap_action))
-    column(12,
-           uiOutput('vfm_type_out'),
-           uiOutput('npic_out'))})
-  output$vfm_type_out<-renderUI({
-    my_choices<-c("Highest correlations", "Clockwise-correlations")
-    div(span("+",inline(
-      pickerInput("vfm_type",NULL,
-                  choices = c("var", "cor"),
-                  choicesOpt = list(
-                    content = stringr::str_trunc(my_choices, width = 75)
-                  ),
-                  selected=vals$vfm_type,
-                  width="150px"
-      ))))
-  })
-  observeEvent(input$vfm_type,{
-    vals$vfm_type<-input$vfm_type
-  })
-
-  observeEvent(input$npic,{
-    vals$npic<-input$npic
-  })
-  output$npic_out<-renderUI({
-    if(is.null(vals$npic)){vals$npic<-10}
-    if(is.null(vals$pclus.cex.var)){vals$pclus.cex.var=1}
-    if(is.null(vals$p.clus.col.text)){vals$p.clus.col.text<-"black"}
-    if(is.null(vals$pclus.col.bg.var)){vals$pclus.col.bg.var<-"white"}
-    if(is.null(vals$p.clus.col.bg.var.alpha)){vals$p.clus.col.bg.var.alpha=0.5}
-    div(
-      div(
-        span("+ Number",
-             inline(
-               tipify(
-                 numericInput("npic", NULL, value = vals$npic, min = 2, width="75px"),"Number of variables to display"
-               )))
-      ),
-      div(
-        span("+ Var size",
-             inline(
-               numericInput("pclus.cex.var", NULL, value = vals$pclus.cex.var, min = 2, width="75px")))
-      ),
-      div(
-        span("+ Var col",
-             inline(
-               div(class="palette",
-                   "+ Palette:",
-                   pickerInput(inputId = "p.clus.col.text",
-                               label = NULL,
-                               choices = vals$colors_img$val[getsolid_col()],
-                               choicesOpt=list(content=vals$colors_img$img[getsolid_col()]),
-                               selected=vals$p.clus.col.text,
-                               width="100px"))))
-      ),
-      div(
-        span("+ Var background",
-             inline(
-               div(class="palette",
-                   "+ Palette:",
-                   pickerInput(inputId = "pclus.col.bg.var",
-                               label = NULL,
-                               choices = vals$colors_img$val[getsolid_col()],
-                               choicesOpt=list(content=vals$colors_img$img[getsolid_col()]),
-                               selected=vals$pclus.col.bg.var,
-                               width="100px"))))
-      ),
-      div(
-        span("+ Var bg alpha",
-             inline(
-               tipify(
-                 numericInput("p.clus.col.bg.var.alpha", NULL, value = vals$p.clus.col.bg.var.alpha, min = 2, width="75px"),"Number of variables to display"
-               )))
-      )
-    )
-  })
-  observeEvent(input$pclus.cex.var,{vals$pclus.cex.var<-input$pclus.cex.var})
-  observeEvent(input$p.clus.col.text,{vals$p.clus.col.text<-input$p.clus.col.text})
-  observeEvent(input$pclus.col.bg.var,{vals$pclus.col.bg.var<-input$pclus.col.bg.var})
-  observeEvent(input$p.clus.col.bg.var.alpha,{vals$p.clus.col.bg.var.alpha<-input$p.clus.col.bg.var.alpha})
-
-
-
-  output$somcut_bgalpha<-renderUI({
-    if(is.null(vals$somcut_bgalpha)){vals$somcut_bgalpha<-0.5}
-    div(span(
-      "+ Background transparency",inline(
-        tipify(numericInput("somcut_bgalpha",NULL,value = vals$somcut_bgalpha,min = 0,max = 1,step = .1, width="75px"),"symbol size")
-      )
-    ))
-  })
-
-  observeEvent(input$insertx_pclus,{
-    vals$insertx_pclus<-input$insertx_pclus
-  })
-  observeEvent(input$inserty_pclus,{
-    vals$inserty_pclus<-input$inserty_pclus
-  })
-  observeEvent(input$ncol_pclus,{
-    vals$ncol_pclus<-input$ncol_pclus
-  })
-  observeEvent(input$bgleg_pclus,{
-    vals$bgleg_pclus<-input$bgleg_pclus
-  })
-  output$pclus_legcontrol<-renderUI({
-    req(input$pclus_facpalette)
-    col<-getcolhabs(vals$newcolhabs,input$pclus_facpalette,2)
-    req(col[1]!=col[2])
-    if(is.null(vals$insertx_pclus)){vals$insertx_pclus<-0}
-    if(is.null(vals$inserty_pclus)){vals$inserty_pclus<-0.4}
-    if(is.null(vals$ncol_pclus)){vals$ncol_pclus<-1}
-    if(is.null(vals$bgleg_pclus)){vals$bgleg_pclus<-0.85}
-    {
-      div(
-        div(span("+ leg x:",tipify(numericInput("insertx_pclus",NULL,value=vals$insertx_pclus,step=0.05, width="75px"),"legend position relative to the x location"))),
-        div(span("+ leg y:",tipify(numericInput("inserty_pclus",NULL,value=vals$inserty_pclus,step=0.05, width="75px"),"legend position relative to the y location"))),
-        div(span("+ ncol leg:",tipify(numericInput("ncol_pclus",NULL,value=vals$ncol_pclus,step=1, width="75px"),"the number of columns in which to set the legend items"))),
-        div (span("+ bg leg:",tipify(numericInput("bgleg_pclus",NULL,value=vals$bgleg_pclus,step=0.05, max=1, width="75px"),"Legend background transparency")))
-      )
-    }
-  })
-
-
-
-  output$pclus_fac_control<-renderUI({
-    req(input$pclus_facpalette)
-    req(input$hc_tab=='hc_tab4')
-    col<-getcolhabs(vals$newcolhabs,input$pclus_facpalette,2)
-    req(input$dot_label_clus == 'labels'|col[1]!=col[2])
-
-    if(input$model_or_data=='som codebook'){
-      choices<-c(colnames(attr(getdata_hc(),"factors")))
-    } else{
-      choices<-c("rownames",colnames(attr(getdata_hc(),"factors")))
-    }
-    span("+ Labels:", inline(
-      pickerInput("pclus_factors",NULL,
-                  choices = c(choices),selected=vals$pclus_factors,width="150px")
-    ))
-
-
-  })
-
-  observeEvent(input$pclus_factors,{vals$pclus_factors<-input$pclus_factors})
 
 
 
@@ -9890,7 +9818,9 @@ output$newfactors_page<-renderUI({
 
   picK <- reactive({input$customKdata})
   observeEvent(input$customKdata,
-               vals$saved_kcustom <- isolate(input$customKdata))
+               vals$saved_kcustom <- input$customKdata)
+
+
   output$customKdata <- renderUI({
     if(is.null(vals$saved_kcustom)){vals$saved_kcustom=2 }
     k<-vals$saved_kcustom
@@ -9903,25 +9833,17 @@ output$newfactors_page<-renderUI({
   observeEvent(input$hcdata_palette,{vals$hcdata_palette<-input$hcdata_palette})
 
 
+
   output$hc_side3 <- renderUI({
     req(input$hc_tab!="hc_tab1"&input$hc_tab!="hc_tab2")
     div(class="map_control_style",style="color: #05668D",
         div(
           div(uiOutput('customKdata')),
-          div(class="palette",
-              "+ Palette:",
-              pickerInput(inputId = "hcdata_palette",
-                          label = NULL,
-                          choices = vals$colors_img$val,
-                          choicesOpt=list(content=vals$colors_img$img),
-                          selected=vals$hcdata_palette,
-                          width="100px")),
-          div(div(
-            tipify(downloadLink('down_hc_model',"+ Download HC model", style="button_active"),"Download file as .rds")
-          ))
+          div(uiOutput('hc_palette'))
         )
     )
   })
+
 
 
   sugg_WSS_data <- reactive({
@@ -9989,11 +9911,16 @@ output$newfactors_page<-renderUI({
   })
   output$clustering_panel <- renderUI({
     #validate(need(length(vals$saved_data)>0,"No Datalist found"))
-    column(12,
-           uiOutput("hc_control"),
+    div(
+           div(class='choosechannel',
+             uiOutput("hc_control")
+           ),
            br(),
-           uiOutput("hc_radio"),
-           uiOutput("hc_panels")
+           div(style="background: white",
+             div(id="hc_radio_btn",
+               uiOutput("hc_radio")),
+             uiOutput("hc_panels")
+           )
     )
   })
   observeEvent(input$hc_tab,{
@@ -10031,17 +9958,14 @@ output$newfactors_page<-renderUI({
     )
   })
   output$hc_save_tab34<-renderUI({
-    req(input$hc_tab!="hc_tab1"&input$hc_tab!="hc_tab2"&input$hc_tab!="hc_tab5")
-    div(id="save_hcbtn",class="save_changes",
-        tipify(uiOutput("saveHC"),"Save Clusters in the Factor-Attribute")
+    req(input$hc_tab)
+    req(input$hc_tab=="hc_tab3"|input$hc_tab=="hc_tab4")
+    div(class="save_changes",
+        div(inline(uiOutput("saveHC")), span(style="font-size: 12px",icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"), "Save Clusters in Datalist ", strong("X")))
     )
   })
 
 
-  output$hc_side5<-renderUI({
-    req(input$hc_tab=='hc_tab5')
-    uiOutput("mapcode_side")
-  })
 
   output$hc_side2<-renderUI({
     req(input$hc_tab=='hc_tab2')
@@ -10074,19 +9998,14 @@ output$newfactors_page<-renderUI({
       renderPlot({
         req(input$model_or_data)
         req(input$method.hc0)
-        suppressWarnings( hc_plot(phc(),labels=pclus_factors()))
+        suppressWarnings( hc_plot(phc(),col=getcolhabs(vals$newcolhabs,input$hcdata_palette,input$customKdata),labels=pclus_points_factor()))
         vals$hc_tab3_plot<-recordPlot()
         vals$hc_tab3_plot
       })
     )
   })
 
-  output$hc_tab4_out<-renderUI({
-    req(input$hc_tab=='hc_tab4')
-    div(uiOutput("pclus_tools"),
-        plotOutput("pclus_code")
-    )
-  })
+
 
 
   output$hc_radio<-renderUI({
@@ -10118,14 +10037,14 @@ output$newfactors_page<-renderUI({
       "hc_tab",
       choiceNames=choiceNames,
       choiceValues =choiceValues,
-      selected=vals$hc_tab
+      selected=vals$hc_tab,
+      status ="radio_hc"
     )
   })
 
   output$hc_panels<-renderUI({
     #req(input$model_or_data)
-    req(input$hc_tab)
-    div(style="margin-left:5px;",
+    div(style="margin-left:5px;background: white",
 
         sidebarLayout(
           sidebarPanel(
@@ -10133,18 +10052,18 @@ output$newfactors_page<-renderUI({
               uiOutput("hc_save_tab34"),
               uiOutput("hc_save_tab5"),
               div(class="map_control_style",style="color: #05668D",
-                  uiOutput("pcorr_data"),
+
                   uiOutput("hc_side1"),
                   uiOutput("hc_side2"),
                   uiOutput("hc_side3"),
                   uiOutput("hc_side4"),
-                  uiOutput("pcorr_display"),
-
-                  uiOutput("pcorr_obs_color"),
-
                   uiOutput("hc_side5"),
+
                   uiOutput("hc_side6"),
                   uiOutput("showerrors_som"),
+                  div(div(
+                    tipify(downloadLink('down_hc_model',"+ Download HC model", style="button_active"),"Download file as .rds")
+                  )),
                   div(
                     actionLink('down_hc_plot', '+ Download plot')
                   )
@@ -10163,6 +10082,363 @@ output$newfactors_page<-renderUI({
         ))
   })
   #uiOutput("mapcode_class")
+  observe({
+    req(input$hc_tab)
+    if(input$hc_tab=='hc_tab4'){
+      shinyjs::show('hc_side4')
+      shinyjs::show('hc_tab4_out')
+    } else if (input$hc_tab!='hc_tab4'){
+      shinyjs::hide('hc_side4')
+      shinyjs::hide('hc_tab4_out')
+    }
+
+
+
+    if(input$hc_tab=='hc_tab5'){
+      shinyjs::show('hc_side5')
+      shinyjs::show('hc_tab5_out')
+    } else if (input$hc_tab!='hc_tab5'){
+      shinyjs::hide('hc_side5')
+      shinyjs::hide('hc_tab5_out')
+    }
+
+  })
+
+
+
+
+
+
+  output$hc_palette<-renderUI({
+    req(input$hc_tab!="hc_tab4"&input$hc_tab!="hc_tab5")
+    div(class="palette",
+        "+ HC Palette:",
+        pickerInput(inputId = "hcdata_palette",
+                    label = NULL,
+                    choices = vals$colors_img$val,
+                    choicesOpt=list(content=vals$colors_img$img),
+                    selected=vals$hcdata_palette,
+                    width="100px"))
+  })
+  output$hc_side4<-renderUI({
+    res<-module_ui_somplot("hc_tab4")
+    res
+  })
+  output$hc_tab4_out<-renderUI({
+    somC<-phc()
+    callModule(module_server_somplot,
+               "hc_tab4",
+               vals=vals,
+               data_target=input$data_hc,
+               som_model=input$som_hc,
+               background_type="hc",
+               property=NULL,
+               hc=somC$som.hc,
+               df_symbol=df_symbol
+    )
+
+    renderPlot({
+
+
+      args<-vals[[ns_tab4("somplot_args")]]
+      req(length(args)>0)
+      vals$hc_tab4_plot<-do.call(bmu_plot,args)
+      vals$hc_tab4_plot
+
+
+    })
+  })
+
+  output$hc_side5<-renderUI({
+    somC<-phc()
+    res<-module_ui_somplot("hc_tab5")
+    res
+
+  })
+  output$hc_tab5_out<-renderUI({
+    #req(input$hc_tab=='hc_tab5')
+    somC<-phc()
+    callModule(module_server_somplot,
+               "hc_tab5",
+               vals=vals,
+               data_target=input$data_hc,
+               som_model=input$som_hc,
+               background_type="hc",
+               property=NULL,
+               map_newdata=T,
+               hc=somC$som.hc,
+               df_symbol=df_symbol
+    )
+    renderPlot({
+
+
+      args<-vals[[ns_tab5("somplot_args")]]
+      req(length(args)>0)
+      vals$hc_tab5_plot<-do.call(bmu_plot,args)
+      vals$hc_tab5_plot
+    })
+  })
+
+  savemapcode<-reactive({
+    hc <- phc()
+
+    data<-vals$saved_data[[input$data_mapcode]]
+    somC<-cutsom.reactive()
+    pred<-mapcode()
+    hcut<-somC$som.hc
+
+    vals$bmus_newdata
+
+    newclass<-pred$unit.classif
+
+
+    for(i in 1:length(hcut)) {newclass[newclass==i]<-rep(hcut[i],sum(  newclass==i))}
+    names(newclass)<-rownames(data)
+
+    temp <- newclass
+
+    if(input$hand_save=="create"){
+      attr(vals$saved_data[[input$data_mapcode]],"factors")[names(temp),input$mc_newname]<-as.factor(temp)
+    } else{
+      attr(vals$saved_data[[input$data_mapcode]],"factors")[input$mc_over]<-as.factor(temp)
+    }
+
+
+
+
+  })
+
+
+  output$pclus_points_inputs<-renderUI({
+    req(isTRUE(input$pclus_addpoints))
+    div(
+      div("+ Palette",inline(uiOutput("pclus_points_palette"))),
+      div("+ Factor",inline(uiOutput("pclus_points_factor_out"))),
+      div("+ Shape",inline(uiOutput("pclus_points_shape"))),
+      div("+ Size",inline(uiOutput("pclus_points_size")))
+    )
+  })
+  output$pclus_points_palette<-renderUI({
+    req(input$hc_tab=='hc_tab4')
+    if(is.null(vals$pclus_points_palette)){vals$pclus_points_palette<-"black"}
+    inline(
+      tipify(pickerInput(inputId = "pclus_points_palette",
+                         label =NULL,
+                         choices = vals$colors_img$val,
+                         choicesOpt = list(content = vals$colors_img$img),
+                         selected=vals$pclus_points_palette,
+                         options=list(container="body"), width="75px"),
+             "Symbol colors"
+      )
+    )
+  })
+  output$pclus_points_factor_out<-renderUI({
+    req(input$pclus_points_palette)
+    req(input$hc_tab=='hc_tab4')
+    col<-getcolhabs(vals$newcolhabs,input$pclus_points_palette,2)
+    if(input$model_or_data=='som codebook'){
+      choices<-c(colnames(attr(getdata_hc(),"factors")))
+    } else{
+      choices<-c("rownames",colnames(attr(getdata_hc(),"factors")))
+    }
+    inline(
+      pickerInput("pclus_points_factor",NULL,
+                  choices = c(choices),selected=vals$pclus_points_factor,width="150px")
+    )
+
+
+  })
+  output$pclus_points_shape<-renderUI({
+    tipify(pickerInput(inputId = "pclus_symbol",
+                       label = NULL,
+                       choices = df_symbol$val,
+                       choicesOpt = list(content = df_symbol$img),
+                       options=list(container="body"), width="100px",
+                       selected=vals$pclus_symbol)
+           ,"symbol shape")
+  })
+  output$pclus_points_size<-renderUI({
+    if(is.null(vals$pclus_points_size)){vals$pclus_points_size<-1}
+    inline(
+      tipify(numericInput("pclus_points_size",NULL,value = vals$pclus_points_size,min = 0.1,max = 3,step = .1, width="100px"),"symbol size")
+    )
+  })
+  output$pclus_text_inputs<-renderUI({
+    req(isTRUE(input$pclus_addtext))
+    div(
+      div("+ Palette",inline(uiOutput("pclus_text_palette"))),
+      div("+ Factor",inline(uiOutput("pclus_text_factor_out"))),
+      div("+ Size",inline(uiOutput("pclus_text_size")))
+    )
+  })
+  output$pclus_text_palette<-renderUI({
+    req(input$hc_tab=='hc_tab4')
+    if(is.null(vals$pclus_text_palette)){vals$pclus_text_palette<-"black"}
+    inline(
+      tipify(pickerInput(inputId = "pclus_text_palette",
+                         label =NULL,
+                         choices =  vals$colors_img$val[getsolid_col()],
+                         selected=vals$pclus_text_palette,
+                         choicesOpt = list(
+                           content =  vals$colors_img$img[getsolid_col()] ),
+                         options=list(container="body"), width="75px"),
+             "Symbol colors"
+      )
+    )
+  })
+  output$pclus_text_factor_out<-renderUI({
+    req(input$pclus_text_palette)
+    req(input$hc_tab=='hc_tab4')
+    col<-getcolhabs(vals$newcolhabs,input$pclus_text_palette,2)
+    if(input$model_or_data=='som codebook'){
+      choices<-c(colnames(attr(getdata_hc(),"factors")))
+    } else{
+      choices<-c("rownames",colnames(attr(getdata_hc(),"factors")))
+    }
+    inline(
+      pickerInput("pclus_text_factor",NULL,
+                  choices = c(choices),selected=vals$pclus_text_factor,width="150px")
+    )
+
+
+  })
+  output$pclus_text_size<-renderUI({
+    if(is.null(vals$pclus_text_size)){vals$pclus_text_size<-1}
+    inline(
+      tipify(numericInput("pclus_text_size",NULL,value = vals$pclus_text_size,min = 0.1,max = 3,step = .1, width="100px"),"symbol size")
+    )
+  })
+  output$somcut_display<-renderUI({
+    div(span("+ Display:",inline(
+      radioButtons(
+        "dot_label_clus", NULL, choices = c("labels", "symbols"), inline=T, width="100px", selected=vals$dot_label_clus)
+    )))
+  })
+  output$vfm_check<-renderUI({
+    if(is.null(vals$pclus_varfacmap_action)){vals$pclus_varfacmap_action<-T}
+    div(style='border-bottom: 1px solid gray',
+      span("+ ",
+           inline(checkboxInput("varfacmap_action", span("Variable factor map",actionLink("varfacmap", tipify(icon(verify_fa = FALSE,name=NULL,class="fas fa-question-circle"), "Click for more details"))),value =vals$pclus_varfacmap_action, width="100px"))),
+      div(style="margin-left: 10px",uiOutput("varfac_out"))
+    )
+  })
+  observeEvent(input$pclus_border,{
+    vals$pclus_border<-input$pclus_border
+  })
+  output$varfac_out<-renderUI({
+    req(isTRUE(input$varfacmap_action))
+    if(is.null(vals$pclus_border)){
+      vals$pclus_border<-"white"
+    }
+    div(
+           uiOutput('vfm_type_out'),
+           uiOutput('npic_out'))})
+  output$pcodes_bgalpha<-renderUI({
+    if(is.null(vals$pclus_border)){vals$pclus_border<-"white"}
+    if(is.null(vals$pcodes_bgalpha)){vals$pcodes_bgalpha<-0.5}
+    div(span(
+      "+ Background transparency",inline(
+        tipify(numericInput("pcodes_bgalpha",NULL,value = vals$pcodes_bgalpha,min = 0,max = 1,step = .1, width="75px"),"symbol size")
+      )
+    ),
+    div(span(span('+ Border:'),inline(
+      pickerInput("pclus_border",
+                  label =NULL,
+                  choices =  vals$colors_img$val[getsolid_col()] ,
+                  choicesOpt = list(
+                    content =  vals$colors_img$img[getsolid_col()] ),
+                  selected= vals$pclus_border, width = '75px')
+    ))))
+  })
+
+
+
+
+
+  observeEvent(input$vfm_type,{
+    vals$vfm_type<-input$vfm_type
+  })
+  observeEvent(input$npic,{
+    vals$npic<-input$npic
+  })
+  observeEvent(input$pclus.cex.var,{
+    vals$pclus.cex.var<-input$pclus.cex.var
+  })
+  observeEvent(input$p.clus.col.text,{
+    vals$p.clus.col.text<-input$p.clus.col.text
+  })
+  observeEvent(input$pclus.col.bg.var,{
+    vals$pclus.col.bg.var<-input$pclus.col.bg.var
+  })
+  observeEvent(input$p.clus.col.bg.var.alpha,{
+    vals$p.clus.col.bg.var.alpha<-input$p.clus.col.bg.var.alpha
+  })
+  observeEvent(input$pclus_points_palette,{
+    vals$pclus_points_palette<-input$pclus_points_palette
+  })
+  observeEvent(input$insertx_pclus,{
+    vals$insertx_pclus<-input$insertx_pclus
+  })
+  observeEvent(input$inserty_pclus,{
+    vals$inserty_pclus<-input$inserty_pclus
+  })
+  observeEvent(input$ncol_pclus,{
+    vals$ncol_pclus<-input$ncol_pclus
+  })
+  observeEvent(input$bgleg_pclus,{
+    vals$bgleg_pclus<-input$bgleg_pclus
+  })
+  observeEvent(input$pclus_symbol,{
+    vals$pclus_symbol<-input$pclus_symbol
+  })
+  observeEvent(input$dot_label_clus,{
+    vals$dot_label_clus<-input$dot_label_clus
+  })
+  observeEvent(input$varfacmap_action,{
+    vals$pclus_varfacmap_action<-input$varfacmap_action
+  })
+  observeEvent(input$pclus_points_size,{
+    vals$pclus_points_size<-input$pclus_points_size
+  })
+  observeEvent(input$pcodes_bgalpha,{
+    vals$pcodes_bgalpha<-input$pcodes_bgalpha
+  })
+  observeEvent(input$pclus_points_factor,{
+    vals$pclus_points_factor<-input$pclus_points_factor
+  })
+
+
+
+
+
+
+  ##hc side6
+
+  output$hc_side6<-renderUI({
+    req(input$hc_tab=='hc_tab6')
+    div(class="map_control_style", pickerInput("data_mapcode_tab6","+ Map New Data",choices=names(vals$saved_data[getobs_mapcode()]), selected=vals$data_mapcode, width="200px"))
+
+  })
+
+
+
+  output$showerrors_som<-renderUI({
+    req(input$hc_tab)
+    req(input$hc_tab=='hc_tab6')
+    div(strong("+ Show error"),
+        pickerInput("show_mapcode_errors", NULL,choices=c('None',"Topographic Error","Quantization Error","Explained Variance","Kaski-Lagus Errors"), width="200px", selected=vals$show_mapcode_errors)
+    )
+  })
+
+
+
+
+  output$hc_save_tab5<-renderUI({
+    req(input$hc_tab=="hc_tab5")
+    div(class="save_changes",
+      bsButton("savemapcode", icon(verify_fa = FALSE,name=NULL,class="fas fa-save"),style  = "button_active", type="action",value=FALSE), span(style="font-size: 12px",icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"), "Save Clusters in Datalist", strong("'Map New data'"))
+    )
+  })
 
   observeEvent(input$down_hc_plot,{
     vals$hand_plot<-switch (input$hc_tab,
@@ -10212,10 +10488,7 @@ output$newfactors_page<-renderUI({
   ####
 
 
-  output$hc_save_tab5<-renderUI({
-    req(input$hc_tab=="hc_tab5")
-    bsButton("savemapcode", icon(verify_fa = FALSE,name=NULL,class="fas fa-save"),style  = "button_active", type="action",value=FALSE)
-  })
+
   observeEvent(input$savemapcode,{
     if(input$savemapcode %% 2) {
       vals$hand_save<-"Save new data clusters"
@@ -10225,18 +10498,6 @@ output$newfactors_page<-renderUI({
         hand_save_modal()
       )
     }
-  })
-  output$hc_tab5_out<-renderUI({
-    req(input$hc_tab=='hc_tab5')
-    column(12,style="background: white",
-           #div(em("under contruction....")),
-           p(strong(h4("BMUs of the New Data"))),
-
-           plotOutput("mapcode_pCodes"),
-           #uiOutput("mapcode_class")
-    )
-
-
   })
 
 
@@ -10253,9 +10514,15 @@ output$newfactors_page<-renderUI({
 
   })
   observeEvent(input$mapcode_loop_go,{
+   # saveRDS(reactiveValuesToList(vals),"vals.rds")
+   # saveRDS(reactiveValuesToList(input),"input.rds")
+   # vals<-readRDS("vals.rds")
+   # input<-readRDS("input.rds")
+    #mnew<-m
+   # beep()
     vals$mapcode_loop_res<-NULL
     m<-mnew<-getmodel_hc()
-    newdata=vals$saved_data[[input$data_mapcode]]
+    newdata=vals$saved_data[[input$data_mapcode_tab6]]
     #pred_som<-predict(mnew,as.matrix(newdata))
     #mnew$unit.classif<-pred_som$unit.classif
     K<-input$mapcode_loop_K
@@ -10269,9 +10536,8 @@ output$newfactors_page<-renderUI({
                    for(i in 1:K) {
                      {
 
-                       #somCnew<-cutsom(mnew,groups=i,method.hc = input$method.hc0,palette=input$hcdata_palette,newcolhabs=vals$newcolhabs,dataX=do.call(cbind,pred_som$predictions))
-                       somCnew<-cutsom(m,i, members=NULL, method.hc=input$method.hc0,palette=input$hcdata_palette,newcolhabs=vals$newcolhabs, dataX=dataX)
-                       #errors<-somQuality3(mnew,newdata,somCnew)
+                       somCnew<-cutsom(m,i, members=NULL, method.hc=input$method.hc0,palette=input$hcdata_palette,newcolhabs=vals$newcolhabs, dataX=dataX,weighted=vals$hc_usewei)
+
                        errors<-somQuality3(mnew,dataX,somCnew)
                        colnames(errors)<-c("Quantization Error","Explained Variance","Topographic Error","Kaski-Lagus Errors")
                        res_mean[[i]]<-errors
@@ -10287,6 +10553,8 @@ output$newfactors_page<-renderUI({
 
   })
   observeEvent(input$mapcode_loop_go,{
+
+    req(input$show_mapcode_errors)
     output$mapcode_loop<-renderUI({
       req(length(vals$mapcode_loop_res)==2)
       res_mean=vals$mapcode_loop_res$res_mean
@@ -10313,10 +10581,6 @@ output$newfactors_page<-renderUI({
     vals$data_mapcode<-input$data_hc
   })
 
-  output$pcorr_data<-renderUI({
-    req(input$hc_tab=='hc_tab5'|input$hc_tab=='hc_tab6')
-    div(class="map_control_style", pickerInput("data_mapcode","+ Map Data",choices=names(vals$saved_data[getobs_mapcode()]), selected=vals$data_mapcode, width="200px"))
-  })
 
 
   observeEvent(input$data_mapcode,{
@@ -10327,40 +10591,8 @@ output$newfactors_page<-renderUI({
     vals$show_mapcode_errors<-"Topographic Error"
   })
 
-  output$showerrors_som<-renderUI({
-    req(input$hc_tab=='hc_tab5'|input$hc_tab=='hc_tab6')
-    div(strong("+ Show error"),
-        pickerInput("show_mapcode_errors", NULL,choices=c('None',"Topographic Error","Quantization Error","Explained Variance","Kaski-Lagus Errors"), width="200px", selected=vals$show_mapcode_errors)
-    )
-  })
-  output$mapcode_side<-renderUI({
-
-    div(
-
-      div(class='weel2',
-
-          uiOutput("mapcodep_labels2")),
-
-      div(
-        class='weel2',
 
 
-        uiOutput("mapcodep_labels")
-      ),
-      uiOutput("pop_mapcode_p"),
-      div(
-
-        div("+ Title",
-            textInput("mapcode_title", NULL, value =
-                        paste0(
-                          paste0("Train:",input$data_hc,"; "),
-                          paste0("Test:",input$data_mapcode)
-                        ), width="200px")
-        )
-      )
-
-    )
-  })
 
 
 
@@ -10369,26 +10601,7 @@ output$newfactors_page<-renderUI({
   observeEvent(input$mapcode_p_factors2,{
     vals$mapcode_p_factors2<-input$mapcode_p_factors2})
 
-  output$mapcodep_labels2<-renderUI({
-    req(input$mapcode_p_dotlabel)
-    #req(input$mapcode_p_dotlabel=='labels')
-    div(span("+ Labels:",inline(
-      pickerInput("mapcode_p_factors2",NULL,choices = c(colnames(attr(vals$saved_data[[input$data_mapcode]],"factors"))),width = '150px', selected=vals$mapcode_p_factors2)
-    )))
 
-  })
-
-  output$pop_mapcode_p<-renderUI({
-    div(
-      class="map_control_style",style="color: #05668D",
-
-      uiOutput("mapcodep_symbol"),
-      uiOutput('mapcode_p_symbol_size_out'),
-      uiOutput("mapcode_p_bg_transp_out"),
-      uiOutput("mapcode_p_border_grid_out")
-    )
-
-  })
 
 
 
@@ -10411,30 +10624,12 @@ output$newfactors_page<-renderUI({
   })
   observeEvent(input$mapcode_p_dotlabel,
                vals$mapcode_p_dotlabel<-input$mapcode_p_dotlabel)
-  output$pcorr_display<-renderUI({
-    req(input$hc_tab=='hc_tab5')
-    if(is.null(vals$mapcode_p_dotlabel)){vals$mapcode_p_dotlabel<-'symbols'}
-    div(span("+ Display:",
-             inline(radioButtons("mapcode_p_dotlabel", NULL, choices = c("labels", "symbols"),selected=vals$mapcode_p_dotlabel, inline=T, width="100px"
-             ))
 
-    ))
-  })
 
   observeEvent(input$pcorr_obscolor,{
     vals$pcorr_obscolor<-input$pcorr_obscolor
   })
-  output$pcorr_obs_color<-renderUI({
-    req(input$hc_tab=='hc_tab5')
-    if(is.null(vals$pcorr_obscolor)){vals$pcorr_obscolor<-"white"}
-    div(span("+ Obs color:", inline(
-      pickerInput("pcorr_obscolor",
-                  label ="",
-                  choices =  vals$colors_img$val ,
-                  choicesOpt = list(content =  vals$colors_img$img ),
-                  selected=vals$pcorr_obscolor, width = '75px')
-    )))
-  })
+
   observeEvent(input$mapcode_p_symbol_size,{
     vals$mapcode_p_symbol_size<-input$mapcode_p_symbol_size
   })
@@ -10491,90 +10686,8 @@ output$newfactors_page<-renderUI({
   mapcode<-reactive({
     kohonen::map(getmodel_hc(),as.matrix(vals$saved_data[[input$data_mapcode]]))
   })
-  output$mapcode_pCodes<-renderPlot({
-
-    p<-mapcodes_pred()
-    vals$mapcodes_p_results<-data.frame(attr(p,"result"))
-    p
-  })
-
-  mapcodes_pred<-reactive({
-    req(input$mapcode_p_bg_transp)
-
-    req(input$mapcode_p_border_grid)
-    req(input$pcorr_obscolor)
-    #saveRDS(reactiveValuesToList(input),"input.rds")
-    #saveRDS(reactiveValuesToList(vals),"vals.rds")
-    #beep()
-    somC<-cutsom.reactive()
-    bgcols<- getcolhabs(vals$newcolhabs,input$hcdata_palette, somC$groups)
-    pred<-mapcode()
-
-    m<-mnew<-getmodel_hc()
-    class1=pred$unit.classif
-    class2<-NULL
-
-    showtrain=F
 
 
-
-    labels.ind=mapcode_p_factors_reac()
-    points=mapcode_pred_points()
-
-    newdata=vals$saved_data[[input$data_mapcode]]
-    pred_som<-predict(mnew,as.matrix(newdata))
-    mnew$unit.classif<-pred_som$unit.classif
-    somCnew<-cutsom(mnew,
-                    groups=input$customKdata,
-                    method.hc = input$method.hc0,
-                    palette=input$hcdata_palette,
-                    newcolhabs=vals$newcolhabs,
-                    dataX=do.call(cbind,pred_som$predictions)
-    )
-    xclus<-NULL
-    yclus<-NULL
-    labclus<-NULL
-    bottom_leg<-NULL
-
-    if(input$show_mapcode_errors!="None"){
-      xclus<-tapply(mnew$grid[[1]][,1], as.factor(somCnew$som.hc), mean)
-      yclus<-tapply(mnew$grid[[1]][,2], as.factor(somCnew$som.hc), mean)
-      errors<-somQuality3(mnew,newdata,somCnew)
-      colnames(errors)<-c("Quantization Error","Explained Variance","Topographic Error","Kaski-Lagus Errors")
-      vals$mapcode_errors<-errors
-      labclus=round(errors[,input$show_mapcode_errors],3)
-      bottom_leg<-paste0("*",input$show_mapcode_errors)
-    }
-
-    p<-pcorr(
-      m=m,
-      npic = 0,
-      pch = as.numeric(input$mapcode_p_symbol),
-      labels.ind =labels.ind,
-      cex =as.numeric(input$mapcode_p_symbol_size),
-      bg_palette = as.character(input$hcdata_palette),
-      bg_vector=bgcols[somC$som.hc],
-      factor.pal=as.character(input$pcorr_obscolor),
-      points=points,
-      legend=T,
-      predict=pred,
-      alpha_bg=input$mapcode_p_bg_transp,
-      border=getcolhabs(vals$newcolhabs,input$mapcode_p_border_grid,1),
-      pred_col=as.character(input$pcorr_obscolor),
-      newcolhabs=vals$newcolhabs,
-      showtrain=showtrain,
-      xclus=xclus,
-      yclus=yclus,
-      labclus=labclus,
-      bottom_leg=bottom_leg,
-      main=input$mapcode_title
-
-    )
-
-
-    vals$hc_tab5_plot<-recordPlot()
-    vals$hc_tab5_plot
-  })
 
   #######
   #######
@@ -10618,53 +10731,49 @@ output$newfactors_page<-renderUI({
 
 
 
-
+observeEvent(input$method.hc0,{
+  vals$method.hc0<-input$method.hc0
+})
 
   output$hc_control <- renderUI({
     req(length(vals$saved_data)>0)
-    div(
-      class="well3",div(class="align_top2",
-                        span(
-                          inline(
-                            div(style="height: 85px;vertical-align: text-top",uiOutput("choicesHC"))
-                          ),
-                          inline(
-                            div(style="height: 85px;vertical-align: text-top",
-                                inline(uiOutput("data_hc")),
+    div(class="well3",
+        div(class="align_top2",
+div(style="height: 85px;vertical-align: text-top; display: table",
+            inline(div(class="align_hc",inline(div(style="padding: 5px",strong("X:"))),inline(uiOutput("data_hc")))),
+            inline(div(class="align_hc",uiOutput("choicesHC"))),
+            inline(div(class="align_hc",uiOutput("somHC"))),
+            inline(div(class="align_hc",uiOutput("disthc"))),
+            inline(div(class="align_hc",
+                       div("Method:"),
+                       div(
+                         pickerInput(
+                           "method.hc0",
+                           NULL,
+                           choices = c("ward.D2", "ward.D", "single", "complete", "average","mcquitty","median","centroid"), width="110px", selected=vals$method.hc0
+                         )
+                       )))
 
-                                inline(conditionalPanel("input.model_or_data=='som codebook'",
-                                                        {
-                                                          uiOutput("somHC")
-                                                        })),
+            #
+        ))
 
-                                inline(conditionalPanel("input.model_or_data=='data'",
-                                                        uiOutput("disthc")
-
-                                ))
-                                ,
-
-                                inline(pickerInput(
-                                  "method.hc0",
-                                  "Method:",
-                                  choices = c("ward.D2", "ward.D", "single", "complete", "average","mcquitty","median","centroid"), width="110px"
-                                ))
+        )
 
 
-                            )
-                          )
-                        )
 
 
-      )
-    )
+
   })
 
   output$data_hc<-renderUI({
     tags$div(style="margin: 0px; padding: 0px",
-             pickerInput("data_hc",
-                         "Datalist:",
-                         choices =    names(vals$saved_data),
-                         width="250px", selected=vals$cur_data)
+             div("Training Datalist:"),
+             div(
+               pickerInput("data_hc",
+                           NULL,
+                           choices =    names(vals$saved_data),
+                           width="250px", selected=vals$cur_data)
+             )
     )
   })
   choices_hc_names <- reactive({
@@ -10681,7 +10790,12 @@ output$newfactors_page<-renderUI({
   })
 
   output$choicesHC<-renderUI({
-    radioButtons("model_or_data", "Clustering target", choiceValues  = choices_hc(), choiceNames=choices_hc_names(),selected=c(choices_hc()[length(choices_hc())]), width="150px")
+    div(style="padding-left: 5px",
+        div(
+          div("Clustering target:"),
+          radioButtons("model_or_data", NULL, choiceValues  = choices_hc(), choiceNames=choices_hc_names(),selected=c(choices_hc()[length(choices_hc())]))
+        )
+    )
   })
   output$saveHC<-renderUI({
     req(input$data_hc)
@@ -10698,31 +10812,94 @@ output$newfactors_page<-renderUI({
     }
   })
   output$somHC<-renderUI({
+req(input$model_or_data=='som codebook')
+    div(
+      inline(
+        div(
+          div("Som codebook:"),
+          pickerInput(
+            "som_hc",
+            NULL,
+            choices = names(attr(getdata_hc(),"som")),
+            width="150px",
+            selected=vals$som_hc
+          )
+        )
+      ),
+      inline(
+        div(
 
-    pickerInput(
-      "som_hc",
-      "Som codebook:",
-      choices = names(attr(getdata_hc(),"som")),
-      width="150px"
+         uiOutput("exclude_empty_neu")
+        )
+      )
     )
   })
+
+  output$exclude_empty_neu<-renderUI({
+    req(input$hc_tab!='hc_tab5')
+    div(
+      div("Exclude empty neurons:", tiphelp("Use the number of observations per neuron as weights for clustering the som")),
+      pickerInput(
+        "hc_usewei",
+        NULL,
+        choices = list("FALSE"=F,"TRUE"=T),
+        width="150px",
+        selected=vals$hc_usewei
+      )
+    )
+  })
+
+  observeEvent(input$hc_usewei,{
+    vals$hc_usewei<-input$hc_usewei
+  })
+
+  observeEvent(input$som_hc,{
+    vals$som_hc<-input$som_hc
+  })
+  observeEvent(input$fixname,{
+    vals$fixname<-input$fixname
+  })
   observeEvent(input$tools_savehc,{
+    if(is.null(vals$fixname)){
+      vals$fixname<-F
+    }
     if(input$tools_savehc %% 2) {
       vals$hand_save<-"Save Clusters"
       vals$hand_save2<-p(p(em(input$data_hc,style="color: gray"),strong("::"),em("Factor-Attribute",style="color: gray"), strong("::")))
-      vals$hand_save3<-NULL
+      vals$hand_save3<-checkboxInput("fixname","Fix the datalist name",vals$fixname)
       showModal(
         hand_save_modal()
       )
     }
   })
+
+
+  bag_hc<-reactive({
+    name0<-paste0('HC',input$customKdata)
+    if(length(input$fixname)>0){
+      if(isTRUE(input$fixname)){
+        name0<-paste0(input$data_hc,'_HC',input$customKdata)
+      }
+    }
+
+    data<-attr(vals$saved_data[[input$data_hc]],"factors")
+    name1<-make.unique(c(colnames(data),name0), sep="_")
+    name1[ncol(data)+1]
+
+
+  })
   output$disthc <- renderUI({
     req(input$model_or_data=="data")
-    pickerInput(
-      "disthc",
-      "Distance",
-      choices = c('bray', "euclidean", 'jaccard'),
-      width="120px"
+    div(
+      div("Distance:"),
+      div(
+        pickerInput(
+          "disthc",
+          NULL,
+          choices = c('bray', "euclidean", 'jaccard'),
+          width="120px"
+        )
+      )
     )
   })
   sc_rf_elbow <- reactive({
@@ -10747,7 +10924,7 @@ output$newfactors_page<-renderUI({
 
       req(input$method.hc0)
 
-      hc<-cutdata1(data=getdata_hc(), method.hc=input$method.hc0)
+      hc<-cutdata1(data=getdata_hc(), method.hc=input$method.hc0, dist=input$disthc)
       plot(hc,labels = as.character(labhc()),main = input$hc_title)
       vals$hc_tab1_plot<-recordPlot()
       vals$hc_tab1_plot
@@ -10808,11 +10985,11 @@ output$newfactors_page<-renderUI({
 
   })
   fn_downloadf <- reactive({
-    if(input$fformat=="svg") filename <- paste0(vals$hand_plot,".svg",sep="")
-    if(input$fformat=="png") filename <- paste0(vals$hand_plot,".png",sep="")
-    if(input$fformat=="tiff") filename <- paste0(vals$hand_plot,".tif",sep="")
-    if(input$fformat=="jpeg") filename <- paste0(vals$hand_plot,".jpg",sep="")
-    if(input$fformat=="pdf") filename <- paste0(vals$hand_plot,".pdf",sep="")
+    if(input$fformat=="svg") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".svg",sep="")
+    if(input$fformat=="png") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".png",sep="")
+    if(input$fformat=="tiff") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".tif",sep="")
+    if(input$fformat=="jpeg") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".jpg",sep="")
+    if(input$fformat=="pdf") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".pdf",sep="")
     return(filename)
   })
 
@@ -11010,6 +11187,8 @@ output$newfactors_page<-renderUI({
     )
   })
 
+
+
   output$hist_d5<-renderUI({
     req(is.data.frame(data_cogs$df))
     data=data_cogs$df
@@ -11024,7 +11203,11 @@ output$newfactors_page<-renderUI({
       rownames(res0)<-NULL
       res<-data.frame( table(res0[,2]))
       colnames(res)<-c("Variable","Missing")
-      renderPrint(res)
+      rownames(res)<-res[,1]
+      pic<-colnames(data_cogs$df)[which(colnames(data_cogs$df)%in%res[,1])]
+      res[,1]<-NULL
+      if(length(pic)>0)
+      renderPrint(res[pic,, drop=F])
     }else{div(em("No missing values"))}
   })
 
@@ -11134,7 +11317,7 @@ output$newfactors_page<-renderUI({
       )))
   })
   output$showhisto<-renderUI({
-    req(input$radio_cogs)
+    req(length(input$radio_cogs)>0)
     if(is.null(vals$cur_showhisto)){vals$cur_showhisto<-F}
     div(
       id="switch_histo",
@@ -11230,9 +11413,6 @@ output$newfactors_page<-renderUI({
     )
   })
 
-
-
-  output$imesc_teste<-renderUI({})
 
   output$lock_back<-renderUI({
     #req(length(vals$saved_data)>0)
@@ -11348,6 +11528,7 @@ output$newfactors_page<-renderUI({
   observeEvent(list(input$radio_cogs,input$last_btn),{
     req(input$last_btn)
     req(!is.na(input$radio_cogs))
+    vals$impute<-F
     if(input$radio_cogs=='tools_drop1'){shinyjs::show('tog_tool1')} else{ hide('tog_tool1')}
     if(input$radio_cogs=='tools_drop2'){shinyjs::show('tog_tool2')} else{ hide('tog_tool2')}
     if(input$radio_cogs=='tools_drop3'){shinyjs::show('tog_tool3')} else{ hide('tog_tool3')}
@@ -11860,10 +12041,8 @@ output$newfactors_page<-renderUI({
              inline(uiOutput("na_methods"))
         ),
         tags$style("#na_method2 .selectize-input {margin-bottom: -12px;}"),
-        inline(
-          conditionalPanel("input.na_method=='knn'",
-                           inline(numericInput("na_knn", "k",value=5, width="75px")))
-        ),
+        inline(uiOutput("na_knn")),
+
         tipify(actionButton("go_na",img(src=na_icon,height='15',width='15'),style="margin-top:-5px "),"Impute missing values"),
         tipify(actionButton("undo_na",icon(verify_fa = FALSE,name=NULL,class="fas fa-undo"),style="margin-top:-5px "),"Undo imputation"),
         uiOutput("na_warning"),
@@ -11871,6 +12050,12 @@ output$newfactors_page<-renderUI({
       )
     )
   })
+  output$na_knn<-renderUI({
+   req(input$na_method=='knn')
+    numericInput("na_knn", "k",value=5, width="75px")
+
+  })
+
   output$tool5<-renderUI({
 
     div(
@@ -11881,8 +12066,11 @@ output$newfactors_page<-renderUI({
         inline(
           div(
             id="tool5_1",
-            div(style="margin-top: 10px",radioButtons("split_options",NULL,
-                                                      choices =c("Random sampling","Balanced sampling"),width = "200px")),
+            div(style="margin-top: 10px",
+                radioButtons(
+                  "split_options",NULL,
+                  choices =c("Random sampling","Balanced sampling"),width = "200px", selected=vals$split_options
+                )),
             inline(uiOutput("split_factor")),
             inline(numericInput("splitperc_data","Size (%)",value=20,min=0,max=99,step=1,width="100px")),
             inline(numericInput("seed_test","Seed",value=NA,width="80px"))
@@ -11944,6 +12132,7 @@ output$newfactors_page<-renderUI({
             div(
               div(class="cogs_in",
                   div(style=" margin-top: 10px;overflow-x: scroll;height:180px;overflow-y: scroll",
+                      div(checkboxInput("check_allfac_agg",strong('Select/Unselect all'),T), style="padding-bottom:10px"),
                       div(style="padding-top: 10px;",
                           checkboxGroupInput('fac_descs', NULL, choices=colnames(
                             attr(vals$saved_data[[input$data_upload]],"factors")), selected = colnames(
@@ -11979,6 +12168,26 @@ output$newfactors_page<-renderUI({
       )
     })
   })
+
+  observeEvent(input$check_allfac_agg,{
+
+
+    if(isTRUE(input$check_allfac_agg)){
+      updateCheckboxGroupInput(session,
+                               "fac_descs",NULL,
+                               choices = colnames(attr(vals$saved_data[[input$data_upload]],"factors")),
+                               selected = colnames(attr(vals$saved_data[[input$data_upload]],"factors"))
+      )
+    } else{
+      updateCheckboxGroupInput(session,
+                               "fac_descs",NULL,
+                               choices = colnames(attr(vals$saved_data[[input$data_upload]],"factors"))
+
+      )
+    }
+
+  })
+
   observeEvent(input$tabs,{
     runjs("Shiny.setInputValue('last_btn', 'main_panel');")
   })
@@ -12009,7 +12218,7 @@ output$newfactors_page<-renderUI({
     aggreg_reac$df<-data
     factors<-attr(data,"factors")
     cbind(factors,data)
-  },options = list(pageLength = 20, info = FALSE,lengthMenu = list(c(20, -1), c( "20","All")), autoWidth=T), rownames = TRUE,class ='cell-border compact stripe')}
+  },options = list(pageLength = 15, info = FALSE,lengthMenu = list(c(15, -1), c( "15","All")), autoWidth=T,scrollX = TRUE, scrollY = "200px"), rownames = TRUE,class ='cell-border compact stripe')}
 
 
   observeEvent(input$go_agg,{try({
@@ -12017,16 +12226,16 @@ output$newfactors_page<-renderUI({
     data<-data_cogs$df
     factors<-attr(data,"factors")[rownames(data),,drop=F]
     coords<-attr(data,"coords")
-    df<- data.frame(aggregate(data,data.frame(factors[,input$fac_descs, drop=F]),get(input$spread_measures)))
+    df<- data.frame(aggregate(data,data.frame(factors[,input$fac_descs, drop=F]),get(input$spread_measures), na.rm=T))
     if(!is.null(coords)){
-      coords<- data.frame(aggregate(coords,factors[,input$fac_descs, drop=F],mean ))
+      coords<- data.frame(aggregate(coords,factors[,input$fac_descs, drop=F],mean , na.rm=T))
       coords<-coords[,which(unlist(lapply(coords,is.numeric))), drop=F]
       rownames(coords)<-rownames(df)
     }
     dfnum<-df[,which(unlist(lapply(df,is.numeric))), drop=F]
     dffac<-df[,which(unlist(lapply(df,is.factor))), drop=F]
     df<-dfnum
-    labels<-make.unique(apply(dffac[,input$fac_descs, drop=F], 1 , paste,collapse = "-"))
+    labels<-make.unique(apply(dffac[,input$fac_descs, drop=F], 1 , paste,collapse = "_"))
 
 
     rownames(df)<-labels
@@ -12072,10 +12281,18 @@ output$newfactors_page<-renderUI({
     )
 
   })
+  observeEvent(input$split_options,{
+    vals$split_options<-input$split_options
+  })
+
+
+  observeEvent(input$splitfactor,{
+    vals$splitfactor<-input$splitfactor
+  })
 
   output$split_factor<-renderUI({
     req(input$split_options=='Balanced sampling')
-    inline(pickerInput("splitfactor","Factor",choices=colnames(attr(vals$saved_data[[vals$cur_data]],"factors")), width ='150px'))
+    inline(pickerInput("splitfactor","Factor",choices=colnames(attr(vals$saved_data[[vals$cur_data]],"factors")), width ='150px', selected=vals$splitfactor))
 
   })
   output$cutlevel_obs<-renderUI({
@@ -12182,21 +12399,8 @@ output$newfactors_page<-renderUI({
     res
   })
 
-  bag_partition<-reactive({
-    bag<-1
-    name0<-paste("Partition")
-    name1<-paste(name0,bag)
-    if(name1%in%colnames(attr(vals$saved_data[[vals$cur_data]],"factors")))
-    {
-      repeat{
-        bag<-bag+1
-        name1<-paste(name0,bag)
-        if(!name1%in%colnames(attr(vals$saved_data[[vals$cur_data]],"factors"))) break
-      }
-    }
-    paste("Partition",bag)
 
-  })
+
 
   observeEvent(change_inputs(),{
     req(data_cog_bag$df==0)
@@ -12255,31 +12459,16 @@ output$newfactors_page<-renderUI({
     req(input$last_btn)
     #req(length(input$radio_cogs)>0)
     if(input$last_btn=='fade'){
-      #removeClass("upload_tools",'upload_tools1')
-      #addClass("upload_tools",'upload_tools')
+
       vals$lock_change=T
 
       shinyjs::hide('tog_tools')
       shinyjs::hide('change_head0')
       #runjs("Shiny.setInputValue('lock_change', FALSE);")
-      if(isFALSE(status_changes$df)){
-        showModal(
-          modalDialog(
-            easyClose = F,
-            div("The",vals$cur_data,"has unsaved changes. Do you want to save these changes?"),
-            footer = div(
+      #if(isFALSE(status_changes$df)){modal_unsaved_chages()} else{}
 
-              bsButton("savechanges_return","Return"),
-              bsButton("savechanges_cancel","Don't save"),
-              bsButton("savechanges_save","Save")
-
-            )
-          )
-        )
-      } else{
-        if(length(vals$saved_data)>0){
-          data_cogs$df<-vals$saved_data[[vals$cur_data]]}
-      }
+      if(length(vals$saved_data)>0){
+        data_cogs$df<-vals$saved_data[[vals$cur_data]]}
 
       updateRadioGroupButtons(session,"radio_cogs",selected=NA)
       #runjs("Shiny.setInputValue('radio_cogs', NA);")
@@ -12292,9 +12481,7 @@ output$newfactors_page<-renderUI({
       shinyjs::show('tog_tools')
       shinyjs::show('change_head0')
       shinyjs::show('data_change')
-      #runjs("Shiny.setInputValue('lock_change', true);")
-      #addClass("upload_tools",'upload_tools1')
-      #removeClass("upload_tools",'upload_tools')
+
 
     }
   }
@@ -12302,6 +12489,23 @@ output$newfactors_page<-renderUI({
   )
 
 
+  modal_unsaved_chages<-reactive({
+
+    showModal(
+      modalDialog(
+        easyClose = F,
+        div("The",vals$cur_data,"has unsaved changes. Do you want to save these changes?"),
+        footer = div(
+
+          bsButton("savechanges_return","Return"),
+          bsButton("savechanges_cancel","Don't save"),
+          bsButton("savechanges_save","Save")
+
+        )
+      )
+    )
+
+  })
 
 
   observeEvent(input$savechanges_cancel,{
@@ -12335,6 +12539,7 @@ output$newfactors_page<-renderUI({
 
       transf["Data_imp",'current']<-input$na_method
       attr(data,"transf")<-transf
+      vals$impute<-T
 
 
       data_cogs$df<-data
@@ -12449,23 +12654,26 @@ output$newfactors_page<-renderUI({
 
 
   savepart<-reactive({
+    curdata<-vals$cur_data
     data<-getdata_upload()
     part<-get_partition()
     factors<-attr(data,"factors")
     if(input$hand_save=="create"){
       vals$bagpart0<-vals$bagpart0+1
       factors[,input$split_newname]<-part
-      attr(vals$saved_data[[vals$cur_data]],"factors")<-factors
-      #vals$cur_data<-input$split_newname
+      attr(vals$saved_data[[input$data_upload]],"factors")<-factors
+      #input$data_upload<-input$split_newname
       #vals$cur_partsom<-input$split_newname
     } else {
       factors[,input$split_over]<-part
-      attr(vals$saved_data[[vals$cur_data]],"factors")<-factors
-      # vals$cur_data<-input$split_over
+      attr(vals$saved_data[[input$data_upload]],"factors")<-factors
+      # input$data_upload<-input$split_over
       #vals$cur_partsom<-input$split_over
     }
     status_changes$df<-c(T,T)
-    hide("tog_tool5")
+    #shinyjs::reset("change_head")
+    updateRadioGroupButtons(session,'radio_cogs',selected = last_btn$equal[1])
+    status_changes$df<-c(T,T)
 
   })
   savechanges_comb<-reactive({
@@ -12510,9 +12718,11 @@ output$newfactors_page<-renderUI({
 
 
     })
+    if(isTRUE(vals$impute)){vals$impute<-F}
   })
+  workflowgif <- base64enc::dataURI(file = "inst/app/www/Save_model.gif", mime = "image/gif")
 
-
+  workflowgif2 <- base64enc::dataURI(file = "inst/app/www/savepoint.gif", mime = "image/gif")
 
   output$imesc_panel<-renderUI({
 
@@ -12538,7 +12748,21 @@ output$newfactors_page<-renderUI({
                             ),
                             tabPanel(strong("Authors"),value="intro2", textauthors()),
                             tabPanel(strong("Workflow"),value="intro3",
-                                     column(12,br())
+                                     column(12,
+
+
+                                            column(6,textworkflow()),
+                                            column(6,style="padding-top: 15px",
+
+                                                   p(strong("Train and save a model"),
+                                                     img(src=workflowgif, width='700px')
+                                                   ),
+                                                  p(strong("Download and Restore a Savepoint"),
+                                                    img(src=workflowgif2, width='700px')
+                                                  ))
+
+
+                                            )
                             ),
                             tabPanel(
                               strong("Running offline"),value="intro4",
@@ -12561,7 +12785,7 @@ output$newfactors_page<-renderUI({
                             tabPanel(
                               strong("Packages"),value="intro5",
                               column(12,
-                                     verbatimTextOutput({"package_refs"}))
+                                     uiOutput({"package_refs"}))
                             )
                           ))),
                         # training panel
@@ -12635,9 +12859,6 @@ output$newfactors_page<-renderUI({
     output$viewdata<-renderUI({
 
       div(
-        style="overflow-x: scroll;",
-
-
         div(class="datalist_tools",
             h5(strong("Numeric-Attribute"),
                inline(
@@ -12781,6 +13002,7 @@ output$newfactors_page<-renderUI({
   })
 
   output$data_over<-renderUI({
+
     data_overwritte$df<-F
     req(input$hand_save=="over")
     validate(need(vals$hand_save!='Save som predictions',"This functionality is unavailable for saving SOM predictions."))
@@ -12798,7 +13020,10 @@ output$newfactors_page<-renderUI({
                  'Include binary columns in the Numeric-Attribute' = selectInput("data_over", NULL,choices=c(names(vals$saved_data)),selectize=T),
                  'Include ordinal variables in the Numeric-Attribute' = selectInput("data_over", NULL,choices=c(names(vals$saved_data)),selectize=T),
                  'Save Clusters' = selectInput("hc_over", NULL,choices=c(colnames(attr(getdata_hc(),"factors"))),selectize=T),
-                 'Save new data clusters' = selectInput("mc_over", NULL,choices=c(colnames(attr(vals$saved_data[[input$data_mapcode]],"factors"))),selectize=T),
+                 'Save new data clusters' = selectInput("mc_over", NULL,choices=c(colnames(attr(vals$saved_data[[vals[[ns_tab5("somplot_args")]]$newdata]],"factors"))),selectize=T),
+
+
+
 
                  'Create data list from aggregation results' = selectInput("agg_over", NULL,choices=c(names(vals$saved_data)),selectize=T),
                  'Save diversity results' = selectInput("div_over", NULL,choices=c(names(vals$saved_data)),selectize=T),
@@ -12856,6 +13081,7 @@ output$newfactors_page<-renderUI({
 
 
   observeEvent(input$go_na,{
+    vals$impute<-T
     #savereac()
     req(input$na_targ=="Factor-Attribute")
     data<-vals$saved_data[[input$data_upload]]
@@ -12885,10 +13111,22 @@ output$newfactors_page<-renderUI({
     )
   })
 
+  bag_partition<-reactive({
 
+
+
+    name0<- if(input$split_options=='Random sampling'){
+     "Partition"
+    } else{
+     paste0("Partition_",input$splitfactor)
+    }
+
+    data<-attr(vals$saved_data[[vals$cur_data]],"factors")
+    name1<-make.unique(c(colnames(data),name0), sep="_")
+    name1[ncol(data)+1]
+  })
 
   bag_name<-reactive({
-    bag<-1
 
 
     name0<-paste0(vals$cur_data,
@@ -12908,26 +13146,31 @@ output$newfactors_page<-renderUI({
                     if(isTRUE(input$raresing)) {paste0("[,-",input$raresing,"]")}
                   }
     )
-    name1<-paste0(name0," (",bag,")")
-    if(name1%in%names(vals$saved_data))
-    {
-      repeat{
-        bag<-bag+1
-        name1<-paste0(name0," (",bag,")")
-        if(!name1%in%names(vals$saved_data)) break
-      }
-    }
 
-    paste0(name0," (",bag,")")
+    if(isTRUE(vals$impute)){
+      topaste<-switch(input$na_method,
+                      "median/mode"="(imp_medmod)",
+                      "Knn"="(imp_knn)",
+                      "bagImpute"="(imp_bagI)",
+                      "medianImpute"="(imp_medI)",
+                      "missForest"="(imp_missF)",
+                      "mice"="(imp_mice)")
+
+      name0<-paste0(name0,topaste)
+
+ }
+    name1<-make.unique(c(names(vals$saved_data),name0), sep="_")
+    name1[length(vals$saved_data)+1]
+
+
 
   })
   ## menu_explore
   ##
 
-
-
-
-
+observeEvent(input$radio_cogs,{
+  vals$impute<-F
+})
 
 
 
@@ -12949,9 +13192,9 @@ output$newfactors_page<-renderUI({
     if(input$fformat=="pdf"|input$fformat=="svg") fheight <- round(fheight*0.3937,2)
     if(input$fformat=="pdf"|input$fformat=="svg") fwidth <- round(fwidth*0.3937,2)
 
-    if(input$fformat=="png") png(fn_downloadf(), height=fheight, width=fwidth, res=fres, units="cm", pointsize = input$pointsize)
-    if(input$fformat=="tiff") tiff(fn_downloadf(), height=fheight, width=fwidth, res=fres, units="cm",compression="lzw", pointsize = input$pointsize)
-    if(input$fformat=="jpeg") jpeg(fn_downloadf(), height=fheight, width=fwidth, res=fres, units="cm",quality=100, pointsize = input$pointsize)
+    if(input$fformat=="png") png(fn_downloadf(), height=fheight, width=fwidth, res=fres, units="cm", pointsize = input$pointsize,type ="cairo-png")
+    if(input$fformat=="tiff") tiff(fn_downloadf(), height=fheight, width=fwidth, res=fres, units="cm",compression="lzw", pointsize = input$pointsize,type ="cairo")
+    if(input$fformat=="jpeg") jpeg(fn_downloadf(), height=fheight, width=fwidth, res=fres, units="cm",quality=100, pointsize = input$pointsize,type ="cairo")
     if(input$fformat=="pdf") pdf(fn_downloadf(), height=fheight, width=fwidth, pointsize = input$pointsize)
     if(input$fformat=="svg") svg(fn_downloadf(), height=fheight, width=fwidth, pointsize = input$pointsize)
 
@@ -12968,7 +13211,7 @@ output$newfactors_page<-renderUI({
               elbow_plot(vals$screeplot_results, sugg = sugg_WSS_data())},
             "screeplot_WSS som"={
               elbow_plot(vals$screeplot_results, sugg = sugg_WSS_model())},
-            "Hcut"={ hc_plot(phc(),labels=pclus_factors())},
+            "Hcut"={ hc_plot(phc(),col=getcolhabs(vals$newcolhabs,input$hcdata_palette,input$customKdata),labels=pclus_points_factor())},
             "codebook clusters"= {replayPlot(vals$pclus_plot)},
             "Minimal Depth distribution"={plot(vals$rfd_res)},
             "Multi-way importance"={plot(vals$rfm_res)},
@@ -12996,18 +13239,12 @@ output$newfactors_page<-renderUI({
 
 
 
-  bmu_clus_points<-reactive({
-    req(input$dot_label_clus)
-    if(input$dot_label_clus == 'symbols'){ T} else {F}
-
-  })
-
   cutsom.reactive<-reactive({
     req( input$customKdata)
     req(input$method.hc0)
-    req(input$hcdata_palette)
+   # req(input$hcdata_palette)
     m<-getmodel_hc()
-    somC<-cutsom(m, input$customKdata, method.hc = input$method.hc0, palette=input$hcdata_palette,newcolhabs=vals$newcolhabs, dataX=do.call(cbind,m$data))
+    somC<-cutsom(m, input$customKdata, method.hc = input$method.hc0, palette=NULL,newcolhabs=vals$newcolhabs, dataX=do.call(cbind,m$data),weighted=vals$hc_usewei)
     somC
   })
 
@@ -13043,7 +13280,7 @@ output$newfactors_page<-renderUI({
               tosave['colors_img'],
               tosave[grep("cur",names(tosave))])
 
-    saveRDS(reactiveValuesToList(input),"input.rds")
+    saveRDS(reactiveValuesToList(input),"input_out.rds")
     saveRDS(tosave,"savepoint.rds")
     beep(10)
 
@@ -13130,7 +13367,7 @@ output$newfactors_page<-renderUI({
     div(class="footer",
         #p(em("by: Danilo C Vieira")),
         style="background: transparent; color: white",
-        #inline(uiOutput("quick_save")),
+        inline(uiOutput("quick_save")),
         inline(tipify(uiOutput("qnote"),"Creates a note for the Datalist", placement = 'top')
         )
     )
@@ -13153,7 +13390,7 @@ output$newfactors_page<-renderUI({
     fheight <- input$fheight
     fwidth <- input$fwidth
     fres <- as.numeric(input$fres)
-    png(paste0(vals$hand_plot,".png",sep=""), height=fheight, width=fwidth, res=fres, units="cm", pointsize = input$pointsize)
+    png(paste0(vals$hand_plot,".png",sep=""), height=fheight, width=fwidth, res=fres, units="cm", pointsize = input$pointsize,type ="cairo-png")
 
     if(vals$hand_plot=="Training plot"){pchanges(vals$som_results)}
     if(vals$hand_plot=="Couting plot"){  pcounts(vals$som_results)}
@@ -13169,7 +13406,7 @@ output$newfactors_page<-renderUI({
     if(vals$hand_plot=="screeplot_WSS som"){
       elbow_plot(vals$screeplot_results, sugg = sugg_WSS_model())}
 
-    if(vals$hand_plot=="Hcut"){ hc_plot(phc(),labels=pclus_factors())}
+    if(vals$hand_plot=="Hcut"){ hc_plot(phc(),col=getcolhabs(vals$newcolhabs,input$hcdata_palette,input$customKdata),labels=pclus_points_factor())}
 
     if(vals$hand_plot=="codebook clusters"){replayPlot(vals$pclus_plot)}
     if(vals$hand_plot=="Minimal Depth distribution"){plot(vals$rfd_res)}
@@ -13211,12 +13448,40 @@ output$newfactors_page<-renderUI({
                 alt = "plot"))
   },deleteFile=TRUE)
   ## Databank
-  getdata_bank<-reactive({
-    req(length(vals$saved_data)>0)
-    req(input$data_bank)
-    vals$saved_data[[input$data_bank]]})
+
 
   ## Descriptive tools
+
+
+
+  output$menu_upload_out<-renderUI({
+    #validate(need(length(vals$saved_data)>0,"No Datalist found"))
+    res<-module_ui_desctools("module_desctools")
+    mod_desctools <- callModule(module_server_desctools, "module_desctools",  vals=vals, df_colors=vals$colors_img,newcolhabs=newcolhabs,df_symbol=df_symbol)
+    removeModal()
+    res
+  })
+
+
+  ##
+  output$menu_som2_out<-renderUI({
+    res<-module_ui_som2("module_som2")
+
+    mod_som2 <- callModule(module_server_som2, "module_som2",  vals=vals, df_colors=vals$colors_img,newcolhabs=newcolhabs,df_symbol=df_symbol)
+    res
+  })
+
+  output$menu_som_out<-renderUI({
+    vals$module<-"SOM"
+
+    res<-module_ui_som("module_som")
+    mod_som <- callModule(module_server_som, "module_som",  vals=vals, df_colors=vals$colors_img,newcolhabs=newcolhabs,df_symbol=df_symbol)
+    removeModal()
+    res
+  })
+
+
+
 
 
 

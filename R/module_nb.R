@@ -880,10 +880,212 @@ pred_test_nb<-reactive({
            column(12,align = "center",
                   popify(actionButton(ns("trainNB"),h4(img(src=nb_icon,height='20',width='20'),"train Naive Bayes",icon("fas fa-arrow-circle-right")),style = "background:  #05668D; color: white"),NULL,"Click to run")
            ),
+           column(12,align="right",
+                  div(style="white-space: normal;max-width: 150px",
+                      actionLink(ns("gotrain_loop"),"+ Train all variables in Datalist Y")
+                  )
+           )
 
     )
   })
 
+  observeEvent(input$gotrain_loop,{
+    showModal(
+      modalDialog(
+        title=div("Train models using variables in",input$data_nbY),
+        easyClose=T,
+
+        div(
+          column(12,
+                 "This action will train",strong(ncol(getyloop()), style="color: red")," models, using the columns of Datalist: ",strong(input$data_nbY),"as Y. The given name of the models will be (",input$data_nbY,"::Y~Datalist_X), and any model already saved with this name(s) will be replaced.",em("We suggest using this tool from a Datalist without any saved nb model", style="color: red")),
+          column(12,
+                 div(strong("Click to proceed:")),
+                 actionButton(ns("train_loop"),"Train_loop_YDatalist"))
+        )
+      )
+    )
+
+  })
+
+  observeEvent(input$train_loop,{
+    removeModal()
+    trainnb_loop()
+  })
+
+
+  getyloop<-reactive({
+    #saveRDS(reactiveValuesToList(input),"input.rds")
+    #saveRDS(reactiveValuesToList(vals),"vals.rds")
+    #input<-readRDS("input.rds")
+    #vals<-readRDS("vals.rds")
+    y<-vals$saved_data[[input$data_nbY]]
+    y<-attr(y,"factors")
+    if(input$nb_test_partition!="None"){
+
+      pic<-which(colnames(y)==input$nb_test_partition)
+      if(length(pic)>0){
+        y<-y[,-pic, drop=F]}
+
+    }
+    y_loop<-y
+    y_loop
+  })
+
+  trainnb_loop<-reactive({
+    #saveRDS(reactiveValuesToList(vals),"vals.rds")
+    #saveRDS(reactiveValuesToList(input),"input.rds")
+    #vals<-readRDS("vals.rds")
+    #input<-readRDS("input.rds")
+    y_loop<-getyloop()
+    withProgress(message="Running",max=ncol(y_loop),{
+      i=2
+      for(i in 1:ncol(y_loop)) {
+        t<-try({
+          data<-getdata_nbX()
+          x<-x_o<-data.frame(data)
+          y<-y_o<-y_loop[,i]
+          output$nb_war<-renderUI({
+            column(12,style="color: red",align="center",
+                   if(anyNA(x)){"Error: Missing values are not allowed in X"} else{NULL},
+                   if(anyNA(y)){"Error: Missing values are not allowed in Y"} else{NULL}
+            )
+          })
+          validate(need(anyNA(x)==F,"NAs not allowed in X"))
+          validate(need(anyNA(y)==F,"NAs not allowed in Y"))
+
+          if(input$nb_test_partition!="None"){
+            parts<-get_parts_nb()
+            train<-parts$train
+            test<-parts$test
+            x<-data.frame(x_o[train,])
+            y<-as.factor(y_o[train])
+          }
+
+          if(input$nb_attribute=="Factor-Attribute"){
+            if(input$data_nbY==input$data_nbX){
+              x[colnames(y_loop)[i]]<-NULL
+            }
+          }
+
+          if(input$nb_attribute=="Data-Attribute"){
+            usekernel=T
+          } else{usekernel=c(T,F)}
+
+
+          bandw_nb<-as.numeric(unlist(strsplit(input$bandw_nb,",")))
+          fL_nb<-as.numeric(unlist(strsplit(input$fL_nb,",")))
+          grid <- expand.grid(fL=c(fL_nb),usekernel = c(usekernel),adjust=c(bandw_nb))
+
+
+          seed<-if (!is.na(input$seednb)){ input$seednb} else{
+            NULL
+          }
+          nb_search<-input$nb_search
+
+          colnames(x)<-gsub(" ",".",colnames(x))
+          colnames(x_o)<-gsub(" ",".",colnames(x_o))
+
+          if (!is.na(input$seednb)){set.seed(input$seednb)}
+
+          NB<-train(x,y,'nb',
+
+                    trControl=trainControl(
+
+                      method = input$nb_res_method,
+                      number = input$cvnb,
+                      repeats = input$repeatsnb,
+                      p=input$pleavenb/100,
+                      savePredictions = "all"
+
+                    ),
+                    tuneGrid=grid
+          )
+          attr(NB,"test_partition")<-paste("Test data:",input$nb_test_partition,"::",input$testdata_nb)
+          #ttr(NB,"Y")<-paste(input$data_nbY,"::",input$nb_sup)
+          attr(NB,"Datalist")<-paste(input$data_nbX)
+
+          vals$nb_unsaved<-NB
+
+          if(input$nb_test_partition!="None"){
+            attr(vals$nb_unsaved,'test')<-x_o[test,]
+            attr(vals$nb_unsaved,"sup_test")<-y_o[test]
+          } else{ attr(vals$nb_unsaved,'test')<-c("None")}
+          vals$bag_nb<-T
+          attr(vals$nb_unsaved,"supervisor")<-colnames(y_loop)[i]
+          attr(vals$nb_unsaved,"inputs")<-list(
+            Ydatalist=input$data_nbY,
+            Y=colnames(y_loop)[i],
+            Xdatalist=input$data_nbX,
+            Xattr=input$nb_attribute
+          )
+
+
+          attr(vals$saved_data[[input$data_nbX]],"nb")[['new nb (unsaved)']]<-vals$nb_unsaved
+          vals$cur_nb_models<-"new nb (unsaved)"
+          vals$bag_nb<-T
+          attr( vals$nb_unsaved,"Y")<-paste0(input$data_nbY,"::",colnames(y_loop)[i])
+          savenb_loop()
+
+
+          beep(10)
+          #saveRDS(vals$nb_unsaved,"nb.rds")
+
+
+        })
+
+
+
+        if("try-error" %in% class(t)){
+          output$nb_war<-renderUI({
+            column(12,em(style="color: gray",
+                         "Error in training the nb model. Check if the number of observations in X and Y are compatible"
+            ))
+          })
+
+        } else{
+          output$nb_war<-NULL
+        }
+        incProgress(1)
+      }
+      updateTabsetPanel(session,"nb_tab","nb_tab2")
+    })
+
+  })
+
+  savenb_loop<-reactive({
+
+    temp<-vals$nb_unsaved
+    name_model<-paste0(attr(temp,"Y"),"~",input$data_nbX)
+    temp<-list(temp)
+    names(temp)<-name_model
+    attr(vals$saved_data[[input$data_nbX]],"nb")[[name_model]]<-temp
+    cur<-name_model
+    attr(vals$saved_data[[input$data_nbX]],"nb")['new nb (unsaved)']<-NULL
+    vals$bag_nb<-F
+    vals$cur_nb_models<-cur
+    vals$cur_nb<-cur
+    vals$nb_unsaved<-NULL
+  })
+  savenb<-reactive({
+    req(vals$cur_nb_models=='new nb (unsaved)')
+    temp<-vals$nb_results
+    if(input$hand_save=="create"){
+      temp<-list(temp)
+      names(temp)<-input$newdatalist
+      attr(vals$saved_data[[input$data_nbX]],"nb")[[input$newdatalist]]<-temp
+      cur<-input$newdatalist
+    } else{
+      temp<-list(temp)
+      names(temp)<-input$over_datalist
+      attr(vals$saved_data[[input$data_nbX]],"nb")[[input$over_datalist]]<-temp
+      cur<-input$over_datalist
+    }
+    attr(vals$saved_data[[input$data_nbX]],"nb")['new nb (unsaved)']<-NULL
+    vals$bag_nb<-F
+    vals$cur_nb_models<-cur
+    vals$cur_nb<-cur
+
+  })
 
   output$nb_resampling<-renderUI({
     div(
@@ -1036,7 +1238,8 @@ pred_test_nb<-reactive({
     partition<- attr(vals$saved_data[[input$data_nbY]],"factors")[rownames(vals$saved_data[[input$data_nbX]]),input$nb_test_partition]
     test<-which(partition==input$testdata_nb)
     train<-which(partition!=input$testdata_nb)
-    list(train=train,test=test)
+    parts<-list(train=train,test=test)
+    parts
   })
 
   getdata_nbX<-reactive({
@@ -1177,7 +1380,7 @@ pred_test_nb<-reactive({
              tabPanel("1. Summary",
                       uiOutput(ns("nb_tab_2_1"))
                       ),
-             tabPanel("2. Penbormace",
+             tabPanel("2. Peformace",
                       uiOutput(ns("nb_tab_2_2"))
                       ),
              tabPanel(if(lapply(m$finalModel$tables,class)[[1]]=="table"){"3. Mosaic plot"} else {"3. Density plot"},
@@ -1256,7 +1459,7 @@ pred_test_nb<-reactive({
   })
 
  output$varimp_gg<-renderUI({
-   req(input$varimp_type=='gg')
+   #req(input$varimp_type=='gg')
    div(class="palette",
      div(
          span("+ Palette:",
@@ -1653,26 +1856,7 @@ output$confusion_nb2<-renderPrint({
       "Create Datalist: NB predictions"={ name_nb_pred()},
       "resample_create"={name_resample_create()}
     )})
-  savenb<-reactive({
-    req(vals$cur_nb_models=='new nb (unsaved)')
-    temp<-vals$nb_results
-    if(input$hand_save=="create"){
-      temp<-list(temp)
-      names(temp)<-input$newdatalist
-      attr(vals$saved_data[[input$data_nbX]],"nb")[[input$newdatalist]]<-c(temp,attr(vals$saved_data[[input$data_nbX]],"nb")[[input$newdatalist]])
-      cur<-input$newdatalist
-    } else{
-      temp<-list(temp)
-      names(temp)<-input$over_datalist
-      attr(vals$saved_data[[input$data_nbX]],"nb")[[input$over_datalist]]<-c(temp,attr(vals$saved_data[[input$data_nbX]],"nb")[[input$over_datalist]])
-      cur<-input$over_datalist
-    }
-    attr(vals$saved_data[[input$data_nbX]],"nb")['new nb (unsaved)']<-NULL
-    vals$bag_nb<-F
-    vals$cur_nb_models<-cur
-    vals$cur_nb<-cur
 
-  })
   nb_create_training_errors<-reactive({
     temp<-vals$nb_down_errors_train
     temp<-data_migrate(vals$saved_data[[input$data_nbX]],temp,"newdatalist")

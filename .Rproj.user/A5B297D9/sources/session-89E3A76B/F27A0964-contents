@@ -1,6 +1,0 @@
-vals<-readRDS("savepoint.rds")
-tosave<-vals
-
-object.size(vals)
-object.size(tosave)
-saveRDS(tosave, "savepoint.rds")

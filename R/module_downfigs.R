@@ -29,15 +29,16 @@ module_server_figs <- function (input, output, session,vals ){
 
     switch (
       vals$hand_plot,
+      'Missing plot'=plot(vals$missing_plot),
       'Scatter plot'=replayPlot(vals$scatter_plot),
       'Corr plot'=replayPlot(vals$corplot),
       "Download plot - Model comparation"=plot(vals$comp_plot),
       "k-means (pca reprentation)"= plot(vals$kmeans_plot_data),
-      "k-means (codebook)"=replayPlot(vals$psom_plot),
+      "k-means (codebook)"=plot(vals$psom_plot),
       "Dendrogram"=replayPlot(vals$hc_tab1_plot),
       "Scree plot"=replayPlot(vals$hc_tab2_plot),
       "Hcut"=replayPlot(vals$hc_tab3_plot),
-      "codebook clusters"=replayPlot(vals$hc_tab4_plot),
+      "codebook clusters"=plot(vals$hc_tab4_plot),
       "mapcodes predictions"=replayPlot(vals$hc_tab5_plot),
       "Ridge plot"=plot(vals$rid_plot),
       "variable summary"={
@@ -89,10 +90,17 @@ module_server_figs <- function (input, output, session,vals ){
       "Training plot"={pchanges(vals$som_results)},
       "Couting plot"={  pcounts(vals$som_results)},
       "uMatrix"={   pUmatrix(vals$som_results)},
-      "BMUs"={replayPlot(vals$bmus_plot)},
+      "BMUs"={plot(vals$bmus_plot)},
       "BMUs predictions"={replayPlot(vals$bmus_pred_plot)},
       "property plot"={replayPlot(vals$pprop_plot)},
-      "Confusion Matrix SOM"={plot(vals$conf_som)}
+      "Confusion Matrix SOM"={plot(vals$conf_som)},
+
+      "feature_importance_models"={plot(vals$plot_ensemble)},
+      "ensemble_confusion_plot"={plot(vals$plot_ensemble)},
+      "ensemble_predictions_class_plot"={plot(vals$plot_ensemble)},
+      "ensemble_predictions_reg_plot"={plot(vals$plot_ensemble)},
+      "ensemble_feature_importance_plot"={plot(vals$plot_ensemble)},
+      "ensemble_interactions_plot"={plot(vals$plot_ensemble)}
 
     )
 
@@ -108,15 +116,16 @@ module_server_figs <- function (input, output, session,vals ){
     png(paste0(vals$hand_plot,".png",sep=""), height=fheight, width=fwidth, res=fres, units="cm", pointsize = input$pointsize)
     switch(
       vals$hand_plot,
+      'Missing plot'=plot(vals$missing_plot),
       'Scatter plot'=replayPlot(vals$scatter_plot),
       'Corr plot'=replayPlot(vals$corplot),
       "Download plot - Model comparation"=plot(vals$comp_plot),
       "k-means (pca reprentation)"= plot(vals$kmeans_plot_data),
-      "k-means (codebook)"=replayPlot(vals$psom_plot),
+      "k-means (codebook)"=plot(vals$psom_plot),
       "Dendrogram"=replayPlot(vals$hc_tab1_plot),
       "Scree plot"=replayPlot(vals$hc_tab2_plot),
       "Hcut"=replayPlot(vals$hc_tab3_plot),
-      "codebook clusters"=replayPlot(vals$hc_tab4_plot),
+      "codebook clusters"=plot(vals$hc_tab4_plot),
       "mapcodes predictions"=replayPlot(vals$hc_tab5_plot),
       "Ridge plot"=plot(vals$rid_plot),
       "variable summary"={
@@ -169,10 +178,19 @@ module_server_figs <- function (input, output, session,vals ){
       "Training plot"={pchanges(vals$som_results)},
       "Couting plot"={  pcounts(vals$som_results)},
       "uMatrix"={   pUmatrix(vals$som_results)},
-      "BMUs"={replayPlot(vals$bmus_plot)},
+      "BMUs"={plot(vals$bmus_plot)},
       "BMUs predictions"={replayPlot(vals$bmus_pred_plot)},
       "property plot"={replayPlot(vals$pprop_plot)},
-      "Confusion Matrix SOM"={plot(vals$conf_som)}
+      "Confusion Matrix SOM"={plot(vals$conf_som)},
+
+
+      "feature_importance_models"={plot(vals$plot_ensemble)},
+      "ensemble_confusion_plot"={plot(vals$plot_ensemble)},
+      "ensemble_predictions_class_plot"={plot(vals$plot_ensemble)},
+      "ensemble_predictions_reg_plot"={plot(vals$plot_ensemble)},
+      "ensemble_feature_importance_plot"={plot(vals$plot_ensemble)},
+      "ensemble_interactions_plot"={plot(vals$plot_ensemble)}
+
     )
 
 
@@ -194,11 +212,11 @@ module_server_figs <- function (input, output, session,vals ){
   )
   fn_downloadf <- reactive({
 
-    if(input$fformat=="png") filename <- paste0(vals$hand_plot,".png",sep="")
-    if(input$fformat=="tiff") filename <- paste0(vals$hand_plot,".tif",sep="")
-    if(input$fformat=="jpeg") filename <- paste0(vals$hand_plot,".jpg",sep="")
-    if(input$fformat=="pdf") filename <- paste0(vals$hand_plot,".pdf",sep="")
-    if(input$fformat=="svg") filename <- paste0(vals$hand_plot,".svg",sep="")
+    if(input$fformat=="png") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".png",sep="")
+    if(input$fformat=="tiff") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".tif",sep="")
+    if(input$fformat=="jpeg") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".jpg",sep="")
+    if(input$fformat=="pdf") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".pdf",sep="")
+    if(input$fformat=="svg") filename <- paste0(vals$cur_data,"_",vals$hand_plot,".svg",sep="")
     return(filename)
   })
 

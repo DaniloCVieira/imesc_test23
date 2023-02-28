@@ -67,14 +67,36 @@ width: 120px;
 float: left !important;
 margin-left: 50px;
 }
-
 .page {
   display: block;
+min-height: 500px;
+  margin: 0px;
+  padding: 5px;
+  padding-top: 0px;
+
+
+}
+.page2 {
+  display: block;
+
+
+  margin: 0px;
+  padding: 5px;
+
+
+
+}
+.page2_ense{
+
+  display: inline-block;
 
   margin: 0px;
   padding: 5px;
   padding-top: 0px;
-  min-height: 500px;
+  padding-bottom: 0px;
+  margin-top: 10px;
+
+
 
 }
 .modal-header{
@@ -1771,6 +1793,16 @@ background-color: white;
           box-shadow: inset 0px 1px 5px #797979ff;
 }
 
+
+.btn-radio_hc {
+  background: #e5e5e5ff;
+}
+.btn-radio_hc:hover{
+  background: SeaGreen;
+}
+.btn-radio_hc.active{
+  background: white;
+}
 #create_datalist .popover{
     z-index: 99999999;
             min-width: 400px;
@@ -1924,5 +1956,51 @@ border-radius: 3px 3px 3px 3px;
 
 
 .som_mode {
+  display: none;
+}
+
+
+.align_top2  { vertical-align: text-top;display: table;
+
+}
+
+.align_hc {
+  height: 85px;vertical-align: text-top; display: table
+}
+
+#combpage3 .tabbable > .nav > li[class=active]    > a {
+  color: #444;
+}
+
+#combpage3 .tabbable > .nav > li[class=active]    > a {border-top: 3px solid SeaGreen;background: white;
+
+}
+
+#combpage3 .tabbable > .nav > li[class=active]    > a {border-bottom: 0px solid ;
+
+}
+
+
+#weistab th{padding: 2px;
+text-align: left;
+font-size:11px}
+
+#weistab td {padding: 1px;
+text-align: left;
+font-size:11px}
+
+
+
+#combpage3 .well {
+padding-left: 10px;
+margin: 0px
+}
+
+
+.ensemble_in {
+  padding: 2px
+}
+
+.divnull{
   display: none;
 }

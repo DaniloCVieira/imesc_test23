@@ -1,7 +1,0 @@
-{
-    "installOptions": {
-        "installFromRepository": true,
-        "libraryPath": "D:/OneDrive/Documents/R/win-library/4.2",
-        "installDependencies": true
-    }
-}

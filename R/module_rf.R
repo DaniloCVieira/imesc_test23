@@ -687,7 +687,15 @@ observeEvent(input$rf_tab,{
 
 
   })
+  observeEvent(input$cm_train_title,{
+    vals$cm_train_title<-input$cm_train_title
+
+  })
+
+
   output$rftab2_4_res <- renderUI({
+    if(is.null(vals$cm_train_title)){vals$cm_train_title<-  "Confusion Matrix"}
+
     validate(need(is.factor( vals$RF_results$finalModel$y), "Confusion matrices are only valid for classification (factor) models."))
     sidebarLayout(
       sidebarPanel(
@@ -722,7 +730,7 @@ observeEvent(input$rf_tab,{
           div(
             span("+ Title:",
                  inline(
-                   textInput(ns("cm_train_title"),NULL, value="Confusion Matrix", width="200px")
+                   textInput(ns("cm_train_title"),NULL, value=vals$cm_train_title, width="200px")
                  )
             )
           ),
@@ -1930,28 +1938,7 @@ output$saved_rfs<-renderUI({
 
   })
 
-  RF_observed<-reactive({
-    req(input$rfpred_which)
-    if(vals$RF_results$modelType=="Regression"){
-      observed<-if(input$rfpred_which=="Datalist"){
-        req(input$predrf_newY)
-        factors<-vals$saved_data[[input$predrf_newY]]
-        factors[,attr(vals$RF_results,"supervisor")]
-      } else{
-        attr(vals$RF_results,"sup_test")
-      }
-    } else{
-      observed<-if(input$rfpred_which=="Datalist"){
-        req(input$predrf_newY)
-        factors<-attr(vals$saved_data[[input$predrf_newY]],"factors")
-        factors[,attr(vals$RF_results,"supervisor")]
-      } else{
-        attr(vals$RF_results,"sup_test")
-      }
-    }
-    observed
 
-  })
   observeEvent(input$predrf_newY,{
     vals$predrf_newY<-input$predrf_newY
   })
@@ -2090,7 +2077,14 @@ output$saved_rfs<-renderUI({
     vals$obs_cm_pred<-input$obs_cm_pred
   })
 
+  observeEvent(input$cm_test_title,{
+    vals$cm_test_title<-input$cm_test_title
+
+  })
+
   output$rf_metrics<-renderUI({
+    if(is.null(vals$cm_test_title)){vals$cm_test_title<- "Confusion Matrix"}
+
     validate( need(vals$RF_results$modelType=="Classification","Confusion matrices are only valid for classification models"))
 
 sidebarLayout(
@@ -2108,7 +2102,7 @@ sidebarLayout(
       div(
         span("+ Title:",
              inline(
-               textInput(ns("cm_test_title"),NULL, value="Confusion Matrix", width="200px")
+               textInput(ns("cm_test_title"),NULL, value=vals$cm_test_title, width="200px")
              )
         )
       ),
@@ -2812,15 +2806,45 @@ sidebarLayout(
     pred_tab
 
   })
+
+  RF_observed<-reactive({
+    req(input$rfpred_which)
+    if(vals$RF_results$modelType=="Regression"){
+      observed<-if(input$rfpred_which=="Datalist"){
+        req(input$predrf_newY)
+        newdata=vals$saved_data[[input$predrf_new]]
+        factors<-vals$saved_data[[input$predrf_newY]][rownames(newdata),, drop=F]
+        factors[,attr(vals$RF_results,"supervisor")]
+      } else{
+        attr(vals$RF_results,"sup_test")
+      }
+    } else{
+      observed<-if(input$rfpred_which=="Datalist"){
+        req(input$predrf_newY)
+        factors<-attr(vals$saved_data[[input$predrf_newY]],"factors")
+        newdata=vals$saved_data[[input$predrf_new]]
+        factors<-vals$saved_data[[input$predrf_newY]][rownames(newdata),, drop=F]
+        factors[,attr(vals$RF_results,"supervisor")]
+      } else{
+        attr(vals$RF_results,"sup_test")
+      }
+    }
+    observed
+
+  })
   RF_observed2<-reactive({
     req(input$rfpred_which)
 
 
     obs_data<-if(input$rfpred_which=="Datalist"){
+      newdata=vals$saved_data[[input$predrf_new]]
       if(vals$RF_results$modelType=="Classification"){
-        factors<-attr(vals$saved_data[[input$predrf_newY_tree]],'factors')
+        factors<-attr(vals$saved_data[[input$predrf_newY_tree]],'factors')[rownames(newdata),, drop=F]
+
       } else {
-        factors<-vals$saved_data[[input$predrf_newY_tree]]}
+        factors<-vals$saved_data[[input$predrf_newY_tree]][rownames(newdata),, drop=F]
+
+        }
 
       res<-factors[,attr(vals$RF_results,"supervisor")]
       names(res)<-rownames(factors[attr(vals$RF_results,"supervisor")])
@@ -3349,9 +3373,11 @@ output$summ_trees<-renderPlot({
   getobsRF<-reactive({
     sup_test<-attr(vals$RF_results,"supervisor")
 
+    #vals$RF_results<-attr(vals$saved_data$abio,"rf")[[2]][[1]]
     datalist<-vals$saved_data
     if(vals$RF_results$modelType=="Classification"){
-      datalist=lapply(datalist,function(x) attr(x,"factors"))}
+      datalist=lapply(datalist,function(x) attr(x,"factors"))} else{}
+
 
     m<-vals$RF_results
     res0<-unlist(

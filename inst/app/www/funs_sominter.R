@@ -1,4 +1,21 @@
 
+
+
+remove_var0<-function(data){
+  pic<- which(apply(data,2,var,na.rm=T)==0)
+  if(length(pic)>0){
+    attrs<-attributes(data)
+    data<-data[,-pic,drop=F]
+    attrs$row.names<-rownames(data)
+    attrs$names<-colnames(data)
+    for(i in names(attrs)){
+      attr(data,i)<-attrs[[i]]
+    }
+  }
+  data
+}
+
+
 #' @export
 distsom<-function(m){
   switch(m$dist.fcts,
@@ -111,6 +128,46 @@ somQuality3<-function (som, traindat, somC)
                                                                                    bmu2)]
 
   err.kaski <-  tapply(err.kaski + sqrt(sqdist),as.factor(somC$somC),mean)
+
+
+  res4<-mapply(c,err.quant = err.quant, err.varratio = unlist(err.varratio),
+               err.topo = err.topo, err.kaski = err.kaski, SIMPLIFY = F)
+  do.call(rbind,res4)
+
+}
+
+somQuality4<-function (som, classes)
+{
+  if (is.null(som))
+    return(NULL)
+  ok.dist <- somDist(som)
+  bmu <- som$unit.classif
+  traindat<-data.frame(do.call(cbind,som$data))
+  names(bmu)<-rownames(traindat)
+  sqdist <- rowSums((traindat - som$codes[[1]][bmu, ])^2, na.rm = TRUE)
+
+
+  err.quant <- tapply(sqdist,as.factor(classes[names(sqdist)]),function(x) mean(x,na.rm=T))
+  tot_vars<-rowSums(t(t(traindat) - colMeans(traindat,
+                                             na.rm = TRUE))^2, na.rm = TRUE)
+  totalvar <- tapply(tot_vars,as.factor(classes[names(sqdist)]),mean)
+
+
+  err.varratio <- lapply(1:length(totalvar),function(x){
+    100 - round(100 * err.quant[[x]]/totalvar[[x]], 2)
+  })
+  bmu2 <- apply(traindat, 1, function(row) {
+    dist <- colMeans((t(som$codes[[1]]) - row)^2, na.rm = TRUE)
+    order(dist)[2]
+  })
+
+
+  err.topo <-   tapply(!ok.dist$neigh.matrix[cbind(bmu, bmu2)],as.factor(classes[names(sqdist)]),mean)
+
+  err.kaski <- e1071::allShortestPaths(ok.dist$proto.data.dist.neigh)$length[cbind(bmu,
+                                                                                   bmu2)]
+
+  err.kaski <-  tapply(err.kaski + sqrt(sqdist),as.factor(classes),mean)
 
 
   res4<-mapply(c,err.quant = err.quant, err.varratio = unlist(err.varratio),
@@ -370,31 +427,62 @@ cutm<-function(m,  method.hc="ward.D2")
 }
 
 
-
-
 #' @export
-cutsom<-function(m,groups, members=NULL, method.hc="ward.D2", palette="turbo",newcolhabs, dataX)
+#vals<-readRDS("savepoint.rds")
+#args=vals$args
+#m<-args$m
+#groups=5
+#members=NULL
+#weighted=T
+#newcolhabs=vals$newcolhabs
+cutsom<-function(m,groups, members=NULL, method.hc="ward.D2", palette="turbo",newcolhabs, dataX,weighted=F)
 {
+  m1<-m
+  codes<-do.call(cbind,m1$codes)
+  rownames(codes)<-1:nrow(codes)
 
+  weights=table(factor(m1$unit.classif, levels=1:nrow(codes)))
+  if(!is.null(members)){members=weights}
+  if(any(is.na(rowSums(codes)))){
+    codes[which(is.na(rowSums(codes))),]<-0
+    m1$codes<-list(codes)
+  }
+  if(weighted==T){
+    if(length(which(weights==0))>0){
+      nas<-rownames(codes)[which(weights==0)]
+      codes<-codes[-which(weights==0),]
+      validate(need(nrow(codes)>groups,"Number of groups cannot be greater than the number of neurons"))
+      m1$codes<-list(codes)
 
-  codes<-m$codes[[1]]
-  weights=table(factor(m$unit.classif, levels=1:nrow(codes)))
-  if(is.null(members)==F){members=weights}
-  d=kohonen::object.distances(m,"codes")
-  hc<-hclust(d,method=method.hc,members=members)
+    }} else{
+      nas<-NULL
+    }
 
+  d=kohonen::object.distances(m1,"codes")
+  hc<-hclust(d,method=method.hc,members=NULL)
   hcut<-cutree( hc, groups)
-  newclass<-m$unit.classif
-  for(i in 1:length(hcut)) {newclass[newclass==i]<-rep(hcut[i],sum(  newclass==i))}
-
-
-  names(newclass)<-rownames(dataX)
+  names(hcut)<-rownames(codes)
+  navec<-rep(NA,length(nas))
+  names(navec)<-nas
+  hcut_new<-c(hcut,navec)
+  hcut_new<-hcut_new[order(as.numeric(names(hcut_new)))]
+  hcut<-hcut_new
+  dfcut<-data.frame(neu=names(hcut),hcut)
+  list<-split(data.frame(id=names(m1$unit.classif),neu=m1$unit.classif),m1$unit.classif)
+  res<-do.call(rbind,lapply(names(list),function(i){
+    x<-list[[i]]
+    x$hc<- dfcut[i,"hcut"]
+    x
+  }))
+  newclass<-res$hc
+  names(newclass)<-rownames(res)
   pred<-newclass
-  colhabs<-getcolhabs(newcolhabs,palette,groups)
-
-  col_vector2=c(colors_bmu(m))
+  #colhabs<-getcolhabs(newcolhabs,palette,groups)
+  col_vector2=c(colors_bmu(m1))
   res<-list(groups,pred,result=NULL, hcut )
-  somC<-list(somC=pred, colhabs=colhabs,som.model=m,som.hc=hcut, groups=groups, colunits=col_vector2,cluster.result=NULL, hc.object=hc)
+  somC<-list(somC=pred,
+             # colhabs=colhabs,
+             som.model=m1,som.hc=hcut, groups=groups, colunits=col_vector2,cluster.result=NULL, hc.object=hc)
   class(somC)<-"somC"
   return(somC)
 
@@ -434,7 +522,7 @@ hc_plot<-function(somC, col=NULL, labels=NULL)
   df.merge.sorted <- df.merge[order(df.merge$y),]
   lbls<-unique(df.merge.sorted$x)
   if(is.null(col)){ color=somC$colhabs[lbls]
-  } else {color=col}
+  } else {color=col[lbls]}
 
   dend1 <- color_branches(hc.dendo, col=color,k = somC$groups, groupLabels = lbls)
   if(is.null(col)){
@@ -543,18 +631,18 @@ topology<-function(df,dist="BrayCurtis",topo=T) {
 
 
 #' @export
-weighted.correlation <- function(v,w,grille)
+weighted.correlation <- function(v,w,grille, i=NULL)
 {
 
   x <- grille$grid$pts[,"x"]
   y <- grille$grid$pts[,"y"]
-  mx <- weighted.mean(x,w)
-  my <- weighted.mean(y,w)
-  mv <- weighted.mean(v,w)
-  numx <- sum(w*(x-mx)*(v-mv))
-  denomx <- sqrt(sum(w*(x-mx)^2))*sqrt(sum(w*(v-mv)^2))
-  numy <- sum(w*(y-my)*(v-mv))
-  denomy <- sqrt(sum(w*(y-my)^2))*sqrt(sum(w*(v-mv)^2)) #correlation for the two axes
+  mx <- weighted.mean(x,w, na.rm=T)
+  my <- weighted.mean(y,w, na.rm=T)
+  mv <- weighted.mean(v,w, na.rm=T)
+  numx <- sum(w*(x-mx)*(v-mv), na.rm=T)
+  denomx <- sqrt(sum(w*(x-mx)^2, na.rm=T))*sqrt(sum(w*(v-mv)^2, na.rm=T))
+  numy <- sum(w*(y-my)*(v-mv), na.rm=T)
+  denomy <- sqrt(sum(w*(y-my)^2, na.rm=T))*sqrt(sum(w*(v-mv)^2, na.rm=T)) #correlation for the two axes
   res <- c(numx/denomx,numy/denomy)
   return(res)
 }
@@ -598,7 +686,7 @@ boxtext <- function(x, y, labels = NA, col.text = NULL, col.bg = NA,
       x <- rep(x, ceiling(ly/lx))[1:ly]
     }
   }
-  strheight
+
   ## Width and height of text
   textHeight <- strheight(labels, cex = theCex, font = font)
   textWidth <- strwidth(labels, cex = theCex, font = font)
@@ -609,7 +697,10 @@ boxtext <- function(x, y, labels = NA, col.text = NULL, col.bg = NA,
   ## Is 'adj' of length 1 or 2?
   if (!is.null(adj)){
     if (length(adj == 1)){
-      adj <- c(adj[1], 0.5)
+      if(length(adj)==2){
+      adj <- c(adj[1], adj[2])} else{
+        c(adj[1], 0.5)
+      }
     }
   } else {
     adj <- c(0.5, 0.5)
@@ -645,6 +736,7 @@ boxtext <- function(x, y, labels = NA, col.text = NULL, col.bg = NA,
   xMid <- x + (-adj[1] + 1/2)*textWidth + offsetVec[1]
   yMid <- y + (-adj[2] + 1/2)*textHeight + offsetVec[2]
 
+  geom_hex()
   ## Draw rectangles:
   rectWidth <- textWidth + 2*padding[1]*charWidth
   rectHeight <- textHeight + 2*padding[2]*charWidth
@@ -657,6 +749,8 @@ boxtext <- function(x, y, labels = NA, col.text = NULL, col.bg = NA,
   ## Place the text:
   text(xMid, yMid, labels, col = col.text, cex = theCex, font = font,
        adj = c(0.5, 0.5))
+
+  points(xMid, yMid,  pch=17)
 
   ## Return value:
   if (length(xMid) == 1){

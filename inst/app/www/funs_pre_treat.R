@@ -67,10 +67,11 @@ getfunc_script<-function(filename){
 #' @export
 data.rares_fun<-function(saved_data,cur_data,filter_data,cutlevel_obs,filter_datalist,selecvar,selecobs,seltree,na.omit,transf,scale,center,rareabund,pct_rare,rarefreq,pct_prev,raresing,obs_match,                     obs_match_datalist){
   try({
-
-    req(cur_data)
+req(cur_data)
     data <-  saved_data[[cur_data]]
-    dim(data)
+   # pic<-  which(apply(data,2,function(x) (mean(x, na.rm=T)==0 )& sd(x, na.rm=T)==0 ))
+    #if(length(pic)>0){    data<-data[,-pic]}
+
     try({
 
       factors<-attr(data,"factors")
@@ -243,10 +244,17 @@ try({
   return(data)
 }
 
-
 #' @export
 nadata<-function(data,na_method, data_old=NULL,data_name=NULL, k=NULL){
   transf<-attr(data,"transf")
+  if(na_method=="missForest"){
+    require("missForest")
+    data<-data.frame(missForest(data)$ximp)
+  }
+  if(na_method=="mice"){
+    require("mice")
+    data<-complete(mice(data))
+  }
   if(na_method=="median/mode"){
     data<-imputeMissings::impute(data, method = "median/mode")}
   if(na_method=="knn"){
@@ -273,6 +281,8 @@ if(!is.null(data_old)){
   attr(data,"transf")<-transf
   return(data)
 }
+
+
 #' @export
 nafactor<-function(data,na_method, k=NULL){
   factor<-attr(data,"factors")

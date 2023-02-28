@@ -113,7 +113,7 @@ module_server_svm <- function (input, output, session,vals,df_colors,newcolhabs 
                          fluidRow(style="background: white",
                                   uiOutput(ns("svm_tab3_1")))),
                        tabPanel(
-                         strong("3.2. Pesvmormace"),
+                         strong("3.2. Performace"),
                          fluidRow(style="background: white",
                                   uiOutput(ns("svm_tab3_2")))
                        ),
@@ -682,7 +682,7 @@ module_server_svm <- function (input, output, session,vals,df_colors,newcolhabs 
              if(input$svm_tab=="svm_tab1"){
                div(
                  div(class='well3',
-                     strong("Type:"),inline(radioButtons(ns('svm_type'),NULL,choices=c("Classification","Regresion"),inline =T, selected=vals$cur_svm_type))
+                     strong("Type:"),inline(radioButtons(ns('svm_type'),NULL,choices=c("Classification","Regression"),inline =T, selected=vals$cur_svm_type))
                  ),
                  div(class="well3",
                      span(strong("X:"),
@@ -835,9 +835,218 @@ module_server_svm <- function (input, output, session,vals,df_colors,newcolhabs 
            column(12, align = "center",
                   popify(actionButton(ns("trainsvm"), h4(img(src=svm_icon,height='20',width='20'),"train Support Vector Machine",icon("fas fa-arrow-circle-right")), style = "background:  #05668D; color: white"),NULL,"Click to run")
            ),
+           column(12,align="right",
+                  div(style="white-space: normal;max-width: 150px",
+                      actionLink(ns("gotrain_loop"),"+ Train all variables in Datalist Y")
+                  )
+           )
 
     )
   })
+  observeEvent(input$gotrain_loop,{
+    showModal(
+      modalDialog(
+        title=div("Train models using variables in",input$data_svmY),
+        easyClose=T,
+
+        div(
+          column(12,
+                 "This action will train",strong(ncol(getyloop()), style="color: red")," models, using the columns of Datalist: ",strong(input$data_svmY),"as Y. The given name of the models will be (",input$data_svmY,"::Y~Datalist_X), and any model already saved with this name(s) will be replaced.",em("We suggest using this tool from a Datalist without any saved svm model", style="color: red")),
+          column(12,
+                 div(strong("Click to proceed:")),
+                 actionButton(ns("train_loop"),"Train_loop_YDatalist"))
+        )
+      )
+    )
+
+  })
+
+
+  observeEvent(input$train_loop,{
+    removeModal()
+    trainsvm_loop()
+  })
+  getyloop<-reactive({
+    #saveRDS(reactiveValuesToList(input),"input.rds")
+    #saveRDS(reactiveValuesToList(vals),"vals.rds")
+    #input<-readRDS("input.rds")
+    #vals<-readRDS("vals.rds")
+    y<-vals$saved_data[[input$data_svmY]]
+    if(input$svm_type== 'Classification'){y<-attr(y,"factors")}
+    if(input$svm_test_partition!="None"){
+      if(input$svm_type== 'Classification'){
+        pic<-which(colnames(y)==input$svm_test_partition)
+        if(length(pic)>0){
+          y<-y[,-pic, drop=F]}
+      }
+    }
+    y_loop<-y
+    y_loop
+  })
+
+  trainsvm_loop<-reactive({
+    #saveRDS(reactiveValuesToList(vals),"vals.rds")
+    #saveRDS(reactiveValuesToList(input),"input.rds")
+    #vals<-readRDS("vals.rds")
+    #input<-readRDS("input.rds")
+    y_loop<-getyloop()
+    withProgress(message="Running",max=ncol(y_loop),{
+      i=1
+      for(i in 1:ncol(y_loop)) {
+        t<-try({
+          data<-getdata_svmX()
+          x<-x_o<-data.frame(data)
+          y<-y_o<-y_loop[,i]
+          output$svm_war<-renderUI({
+            column(12,style="color: red",align="center",
+                   if(anyNA(x)){"Error: Missing values are not allowed in X"} else{NULL},
+                   if(anyNA(y)){"Error: Missing values are not allowed in Y"} else{NULL}
+            )
+          })
+          validate(need(anyNA(x)==F,"NAs not allowed in X"))
+          validate(need(anyNA(y)==F,"NAs not allowed in Y"))
+          req(input$svm_test_partition)
+          if(input$svm_test_partition!="None"){
+            parts<-get_parts_svm()
+            train<-parts$train
+            test<-parts$test
+            x<-data.frame(getdata_svmX()[train,])
+            y<-y_o[train]
+          }
+
+          if(input$svm_search=="user-defined"){
+            svm_search<-"grid"
+            cost_svm<-as.numeric(unlist(strsplit(input$cost_svm,",")))
+            if(input$svm_method!="svmLinear"){
+
+              sigma_svm<-as.numeric(unlist(strsplit(input$sigma_svm,",")))
+              grid <- expand.grid(C=c(cost_svm),sigma=c(sigma_svm))
+            } else{
+              grid <- expand.grid(C=c(cost_svm))
+            }
+
+
+          } else{
+            grid<-svmGrid(x,y, len=input$svm_tuneLength, input$svm_search)
+            if(input$svm_method=="svmLinear"){
+              grid<-grid["C"]
+            }
+          }
+
+          seed<-if (!is.na(input$seedsvm)) { input$seedsvm} else{
+            NULL
+          }
+          svm_search<-input$svm_search
+
+          colnames(x)<-gsub(" ",".", colnames(x))
+
+          if (!is.na(input$seedsvm)) {set.seed(input$seedsvm)}
+
+
+          svm<-train(x,y,input$svm_method,
+
+                     trControl=trainControl(
+
+                       method = input$svm_res_method,
+                       number = input$cvsvm,
+                       repeats = input$repeatssvm,
+                       p=input$pleavesvm/100,
+                       savePredictions = "all"
+
+                     ),
+                     tuneGrid=grid
+          )
+          attr(svm,"test_partition")<-paste("Test data:",input$svm_test_partition,"::",input$testdata_svm)
+          attr(svm,"Y")<-paste(input$data_svmY,"::",colnames(y_loop)[i])
+          attr(svm,"Datalist")<-paste(input$data_svmX)
+
+          vals$svm_unsaved<-svm
+
+          if(input$svm_test_partition!="None"){
+            attr(vals$svm_unsaved,'test')<-x_o[test,]
+            attr(vals$svm_unsaved,"sup_test")<-y_o[test]
+          } else{ attr(vals$svm_unsaved,'test')<-c("None")}
+          vals$bag_svm<-T
+          attr(vals$svm_unsaved,"supervisor")<-colnames(y_loop)[i]
+          attr(vals$svm_unsaved,"inputs")<-list(
+            Ydatalist=input$data_svmY,
+            Y=colnames(y_loop)[i],
+            Xdatalist=input$data_svmX
+          )
+
+
+
+
+
+
+          attr(vals$saved_data[[input$data_svmX]],"svm")[['new svm (unsaved)']]<-vals$svm_unsaved
+          vals$cur_svm_models<-"new svm (unsaved)"
+          vals$bag_svm<-T
+
+          attr( vals$svm_unsaved,"Y")<-paste0(input$data_svmY,"::",colnames(y_loop)[i])
+          savesvm_loop()
+
+
+          beep(10)
+          #saveRDS(vals$nb_unsaved,"nb.rds")
+
+
+        })
+
+
+
+        if("try-error" %in% class(t)){
+          output$svm_war<-renderUI({
+            column(12,em(style="color: gray",
+                         "Error in training the svm model. Check if the number of observations in X and Y are compatible"
+            ))
+          })
+
+        } else{
+          output$svm_war<-NULL
+        }
+        incProgress(1)
+      }
+      updateTabsetPanel(session,"svm_tab","svm_tab2")
+    })
+
+  })
+
+  savesvm_loop<-reactive({
+
+    temp<-vals$svm_unsaved
+    name_model<-paste0(attr(temp,"Y"),"~",input$data_svmX, "(",input$svm_method,")")
+    temp<-list(temp)
+    names(temp)<-name_model
+    attr(vals$saved_data[[input$data_svmX]],"svm")[[name_model]]<-temp
+    cur<-name_model
+    attr(vals$saved_data[[input$data_svmX]],"svm")['new svm (unsaved)']<-NULL
+    vals$bag_svm<-F
+    vals$cur_svm_models<-cur
+    vals$cur_svm<-cur
+    vals$svm_unsaved<-NULL
+  })
+  savesvm<-reactive({
+    req(vals$cur_svm_models=='new svm (unsaved)')
+    temp<-vals$svm_results
+    if(input$hand_save=="create"){
+      temp<-list(temp)
+      names(temp)<-input$newdatalist
+      attr(vals$saved_data[[input$data_svmX]],"svm")[[input$newdatalist]]<-temp
+      cur<-input$newdatalist
+    } else{
+      temp<-list(temp)
+      names(temp)<-input$over_datalist
+      attr(vals$saved_data[[input$data_svmX]],"svm")[[input$over_datalist]]<-temp
+      cur<-input$over_datalist
+    }
+    attr(vals$saved_data[[input$data_svmX]],"svm")['new svm (unsaved)']<-NULL
+    vals$bag_svm<-F
+    vals$cur_svm_models<-cur
+    vals$cur_svm<-cur
+
+  })
+
   output$svm_grid<-renderUI({
     req(input$svm_search=="user-defined")
     div(
@@ -1605,26 +1814,7 @@ module_server_svm <- function (input, output, session,vals,df_colors,newcolhabs 
       "Create Datalist: SVM predictions"={ name_svm_pred()},
       "resample_create"={name_resample_create()}
     )})
-  savesvm<-reactive({
-    req(vals$cur_svm_models=='new svm (unsaved)')
-    temp<-vals$svm_results
-    if(input$hand_save=="create"){
-      temp<-list(temp)
-      names(temp)<-input$newdatalist
-      attr(vals$saved_data[[input$data_svmX]],"svm")[[input$newdatalist]]<-c(temp,attr(vals$saved_data[[input$data_svmX]],"svm")[[input$newdatalist]])
-      cur<-input$newdatalist
-    } else{
-      temp<-list(temp)
-      names(temp)<-input$svm_over
-      attr(vals$saved_data[[input$data_svmX]],"svm")[input$svm_over]<-temp
-      cur<-input$svm_over
-    }
-    attr(vals$saved_data[[input$data_svmX]],"svm")['new svm (unsaved)']<-NULL
-    vals$bag_svm<-F
-    vals$cur_svm_models<-cur
-    vals$cur_svm<-cur
 
-  })
   svm_create_training_errors<-reactive({
     temp<-vals$svm_down_errors_train
     temp<-data_migrate(vals$saved_data[[input$data_svmX]],temp,"newdatalist")

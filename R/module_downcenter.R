@@ -83,12 +83,20 @@ module_server_downcenter <- function (input, output, session,vals ){
            "sgboost_cm_test"=data.frame(vals$sgboost_cm_test),
 
 
-           "pcorr"=vals$pcorr_results,
+           "pcorr"=vals$biplot_som,
            "pcodes"={
              res=data.frame(vals$som_results$codes[[1]])
              rownames(res)<-paste("unit",1:nrow(res))
              res},
-           "som predictions"={data.frame(vals$predsom_reults)}
+           "som predictions"={data.frame(vals$predsom_reults)},
+
+           "comp_qclass"={data.frame(vals$down_ensemble)},
+           'ensemble_model_predictions'={data.frame(vals$down_ensemble)},
+           'ensemble_predictions'={data.frame(vals$down_ensemble)},
+           'ensemble_confusion'={data.frame(vals$down_ensemble)},
+           'ensemble_obs_errors'={data.frame(vals$down_ensemble)},
+           "ensemble_interactions"={data.frame(vals$down_ensemble)}
+
 
            )
   })

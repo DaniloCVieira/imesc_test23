@@ -31,7 +31,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   )
 
   ns<-session$ns
-
+  ns_som <- NS('som')
   tunesom<-reactiveValues(
     finetopo=F,
     finesom=F,
@@ -364,7 +364,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
              mainPanel(
                div( plotOutput(ns("pCorrCodes")),
                     #renderPrint({
-                    #m=vals$som_results
+                    #m=getsom()
                     #grid<-m$grid$pts
                     #dtopo<-unit.distances(m$grid)
                     #dcodes<-object.distances(m,"codes")
@@ -398,17 +398,17 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     p
   })
   output$pchanges <- renderPlot({
-    pchanges(vals$som_results)
+    pchanges(getsom())
   })
   output$pcounts <- renderPlot({
-    pcounts(vals$som_results)
+    pcounts(getsom())
   })
   output$pUmatrix <- renderPlot({
-    pUmatrix(vals$som_results)
+    pUmatrix(getsom())
   })
   output$pproperty <- renderPlot({
     req(input$variable_pproperty)
-    pproperty(vals$som_results,
+    pproperty(getsom(),
               input$variable_pproperty,
               input$variable_pproperty)
     vals$pprop_plot<-recordPlot()
@@ -689,7 +689,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     )
   })
   output$predsom_tabs<-renderUI({
-    validate(need(length(vals$som_results)>0,"No trained model in selected Datalist"))
+    validate(need(length(getsom())>0,"No trained model in selected Datalist"))
     predsom.reactive()})
   output$conf_som<-renderUI({
     fluidRow(
@@ -916,14 +916,9 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
 
   output$som_models<-renderUI({
-    if(is.null(vals$cur_train)){vals$cur_train<-"new som (unsaved)"}
     req(input$data_som)
     req(input$som_tab=="som_tab2"|input$som_tab=="som_tab3")
-    choices<-if(isTRUE(vals$bagmodel)){
-      c("new som (unsaved)", names(attr(vals$saved_data[[input$data_som]],"som")))
-    } else{
-      names(attr(vals$saved_data[[input$data_som]],"som"))
-    }
+    choices<-names(attr(vals$saved_data[[input$data_som]],"som"))
     div(
       div(
         div(strong("Som results:", tiphelp("SOM results. Click to see SOM results saved in the selected Datalist"))),
@@ -952,8 +947,8 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     req(input$som_tab=="som_tab2"|input$som_tab=="som_tab3")
     div(
       p(strong("X:"), em(input$data_som)),
-      p(style="margin-top: -10px",strong("Y:"),em(input$som_type2,";"),em(attr(vals$som_results,"Method"))),
-      p(style="margin-top: -10px",strong("Test Partition:"),em(attr(vals$som_results,"test_partition"))),
+      p(style="margin-top: -10px",strong("Y:"),em(input$som_type2,";"),em(attr(getsom(),"Method"))),
+      p(style="margin-top: -10px",strong("Test Partition:"),em(attr(getsom(),"test_partition"))),
       p(style="margin-top: -10px",strong("Som-Attribute:"), em(input$som_models)),
 
 
@@ -1060,7 +1055,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     }
   })
   output$som_test_ref<-renderUI({
-  req(input$som_test_pick)
+    req(input$som_test_pick)
     req(input$som_test_pick!="None")
     req(input$data_som)
     if(is.null(vals$cur_testsom)){vals$cur_testsom<-1}
@@ -1145,7 +1140,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
 
   output$results_panel<-renderUI({
-    validate(need(length(vals$som_results)>0,"No trained model in selected Datalist"))
+    validate(need(length(getsom())>0,"No trained model in selected Datalist"))
 
 
     validate(need(!is.null(vals$saved_data),"no data found"))
@@ -1162,7 +1157,16 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
                                         p(popify(downloadButton(ns("down_kohonen_results"), icon("fas fa-braille"),style = "button_active"),NULL,"download kohonen object as rds file containing the object of class kohonen with components")))
                                     )
                              ),
-                             column(12, style="margin-top: 10px",splitLayout(cellWidths = c("50%","10%"),div(p(strong("Training Parameters")),tableOutput(ns("train.summary")))))
+                             column(12, style="margin-top: 10px",
+                               splitLayout(
+                                 cellWidths = c("50%","10%"),
+                                 div(
+                                   p(strong("Training Parameters")),
+                                   tableOutput(ns("train.summary"))
+
+                                 )
+                               )
+                             )
                       )
                     ),
                     tabPanel("3.2. Changes",value = "train_tab2",
@@ -1175,23 +1179,70 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
                              column(12,style = "background: white;",
                                     column(12,actionButton(ns('downp_pcounts'),icon("fas fa-image"),icon("fas fa-download"), style="button_active")),
                                     column(12, plotOutput(ns("pcounts"))))),
-                    tabPanel("3.4. Umatrix", value = "train_tab4",
-                             div(uiOutput(ns("som_umatrix")))
-                    ),
-                    tabPanel("3.5. BMUs", value = "train_tab5",
-                             uiOutput(ns("pcorr_control"))),
-                    tabPanel("3.6. Property", value = "train_tab6",
-                             column(12,
-                                    style = "background: white;",br(),column(12, strong("Property",tipify(icon("fas fa-question-circle"),"Show areas for high values (red) and low values (blue) for the selected variable"))),
-                                    column(12, uiOutput(ns("var_pproperty"))),
-                                    column(12,
-                                           column(12,actionButton(ns("downp_pproperty"),icon("fas fa-image"),icon("fas fa-download"), style="button_active")),
-                                           column(12,plotOutput(ns("pproperty")))))
-                    )
+                    tabPanel("3.4. BMUs", value = "train_tab5",
+                             uiOutput(ns("plot_bmu"))
+                            )
 
         )
     )
   })
+
+
+  output$plot_bmu<-renderUI({
+
+    req(length(getsom())>0)
+    sidebarLayout(
+      sidebarPanel(uiOutput(ns("bmu_plot_side"))),
+      mainPanel(uiOutput(ns("bmu_plot")))
+    )
+  })
+
+  output$bmu_plot_side<-renderUI({
+    req(length(getsom())>0)
+    # req(input$model_or_data=="som codebook")
+    div(class="map_control_style",style="color: #05668D",
+        tagList(module_ui_somplot(ns("som"))),
+        uiOutput(ns("bmu_down_links")))
+  })
+
+  output$bmu_plot<-renderUI({
+    req(length(getsom())>0)
+    hc=NULL
+    callModule(module_server_somplot,
+               "som",
+               vals=vals,
+               data_target=input$data_som,
+               som_model=input$som_models,
+               background_type="uMatrix",
+               property=NULL,
+               hc=hc,
+               df_symbol=df_symbol
+    )
+
+    #vals<-readRDS('vals.rds')
+
+    # saveRDS(vals[[ns_som("somplot_args")]],"somplot_args.rds")
+
+
+    #vals$som_som
+    #valsk$k_means_results[[1]]
+    # valsk$som_result
+    renderPlot({
+      #vals<-readRDS("savepoint.rds")
+      # vals<-readRDS("savepoint_som.rds")
+      # input<-readRDS("input_som.rds")
+      args<-vals[[ns(ns_som("somplot_args"))]]
+      req(length(args)>0)
+      bp<-args$bp
+      bp$id=NULL
+      vals$biplot_som<-bp
+
+      vals$bmus_plot<-do.call(bmu_plot,args)
+      vals$bmus_plot
+    })
+
+  })
+
   output$som_umatrix<-renderUI({
     column(12,style = "background: white;",
            column(12,actionButton(ns("downp_pmatrix"),icon("fas fa-image"),icon("fas fa-download"), style="button_active")),
@@ -1202,9 +1253,9 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     vals$sompred_type<-input$sompred_type
   })
   output$predsom_panel<-renderUI({
-    validate(need(length(vals$som_results)>0,"No trained model in selected Datalist"))
+    validate(need(length(getsom())>0,"No trained model in selected Datalist"))
 
-    test<-attr(vals$som_results,"test_partition")
+    test<-attr(getsom(),"test_partition")
 
     column(12,style="background: white",
            splitLayout(cellWidths = c("30%",'40%','10%'),
@@ -1311,11 +1362,11 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     vals$cur_predsom_results<-input$predsom_results
   })
   output$som_pred_results<-renderUI({
-    if(attr(vals$som_results,"Method")=="Unsupervised"){
+    if(attr(getsom(),"Method")=="Unsupervised"){
       choices<-c("Data predictions (X)", "Obs errors (X)","Var errors (X)","BMUs","Neuron predictions (X)","Quality measures")
       selected= vals$cur_predsom_results
     } else{
-      if(attr(vals$som_results,"som_type2")=="Numeric"){
+      if(attr(getsom(),"som_type2")=="Numeric"){
         choices<-c("Data predictions (X)","Data predictions (Y)","Obs errors (X)", "Obs errors (Y)","Var errors (X)", "Var errors (Y)","BMUs","Neuron predictions (X)","Neuron predictions (Y)","Quality measures")
         selected= vals$cur_predsom_results
       } else{
@@ -1356,7 +1407,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
 
 
   output$predsom_newY2<-renderUI({
-    req(attr(vals$som_results,"Method")!="Unsupervised")
+    req(attr(getsom(),"Method")!="Unsupervised")
     req(input$predsom_results%in%c("Obs errors (Y)"))
     span("+ Y Datalist:",tipify(icon("fas fa-question-circle"),"Data containing observed values to be compared with predicted values",
                                 options=list(container="body")),
@@ -1427,7 +1478,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
   output$som_globalERR_X<-DT::renderDataTable({
 
-    m<-vals$som_results
+    m<-getsom()
     predX<- correctsom()$predX
     observed<-newdata_som()
     res0<-data.frame(as.list(postResample(predX,observed)))
@@ -1438,7 +1489,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   },options = list(pageLength = 20, info = FALSE,dom='t', autoWidth=T), rownames = TRUE,class ='cell-border compact stripe')
   output$som_globalERR_Y<-DT::renderDataTable({
 
-    m<-vals$som_results
+    m<-getsom()
     predX<- correctsom()$predY
     observed<-newdata_som()
     res0<-data.frame(postResample(predX,observed))
@@ -1453,7 +1504,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   },options = list(pageLength = 20, info = FALSE,lengthMenu = list(c(20, -1), c( "20","All")), autoWidth=T), rownames = TRUE,class ='cell-border compact stripe')
   output$corrected_predsom_warning<-renderUI({
     req(input$sompred_type)
-    #req(length(attr(vals$som_results,"test"))>0)
+    #req(length(attr(getsom(),"test"))>0)
     newx<-nrow(attr(correctsom(),"newx"))
     req(!is.null(newx))
     req(newx>0)
@@ -1474,11 +1525,11 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   output$predsom_property<-renderPlot({
     req( input$predsom_var)
     som_pred<-pred_som()
-    plot(vals$som_results, type = "property", main = input$predsom_var, property = som_pred$unit.predictions[[1]][,input$predsom_var], palette.name=coolBlueHotRed,cex=0.5,shape="straight",keepMargins = TRUE)})
+    plot(getsom(), type = "property", main = input$predsom_var, property = som_pred$unit.predictions[[1]][,input$predsom_var], palette.name=coolBlueHotRed,cex=0.5,shape="straight",keepMargins = TRUE)})
 
   getobs_somX<-reactive({
     datalist<-vals$saved_data
-    m<-vals$som_results
+    m<-getsom()
     res0<-unlist(
       lapply(datalist, function (x){
         res<-colnames(x)%in%colnames(m$data[[1]])
@@ -1488,7 +1539,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     names(res0[res0==T])
   })
   test_som<-reactive({
-    pred_tab<-if(input$sompred_type=="Partition"){attr(vals$som_results,"test")}
+    pred_tab<-if(input$sompred_type=="Partition"){attr(getsom(),"test")}
     if(input$sompred_type=="Datalist"){
       pred_tab<-vals$saved_data[[input$predsom_new]]}
     pred_tab
@@ -1503,7 +1554,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     choices
   })
   errors_somX_sp<-reactive({
-    m<-vals$som_results
+    m<-getsom()
     predX<- correctsom()$predX
 
     observed<-newdata_som()
@@ -1525,7 +1576,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
 
   })
   errors_somY_sp<-reactive({
-    m<-vals$som_results
+    m<-getsom()
     predY<- correctsom()$predY
 
     observed<-newdata_somY()
@@ -1546,7 +1597,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
 
   })
   errors_somX<-reactive({
-    m<-vals$som_results
+    m<-getsom()
     predX<- correctsom()$predX
 
     observed<-newdata_som()
@@ -1556,7 +1607,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
 
   })
   errors_somY<-reactive({
-    m<-vals$som_results
+    m<-getsom()
     predX<- correctsom()$predY
 
     observed<-newdata_somY()
@@ -1568,7 +1619,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     newdata<-NULL
     if(length(input$sompred_type)>0){
       if(length(input$predsom_newY2)>0){
-        m<-vals$som_results
+        m<-getsom()
         newdata= if(input$sompred_type=="Partition"){
           attr(m,"test")} else{
             vals$saved_data[[input$predsom_newY2]]
@@ -1581,7 +1632,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
   getobs_som2<-reactive({
     datalist<-vals$saved_data
-    m<-vals$som_results
+    m<-getsom()
 
 
     res0<-unlist(
@@ -1594,7 +1645,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
   correctsom<-reactive({
     som_pred<-pred_som()
-    m<-vals$som_results
+    m<-getsom()
     newdata=as.matrix(newdata_som())
     pred_som<-predict(m,newdata=newdata, whatmap = 1)
 
@@ -1604,9 +1655,9 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   get_sompred_results<-reactive({
     req(input$predsom_results)
     som_pred<-pred_som()
-    m<-vals$som_results
+    m<-getsom()
     obs=attr(m,"sup_test")
-    m<-vals$som_results
+    m<-getsom()
     newdata<-newdata_som()
     newdataY<-newdata_somY()
     som_pred<-pred_som()
@@ -1627,7 +1678,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
   newdata_som<-reactive({
     req(input$sompred_type)
-    m<-vals$som_results
+    m<-getsom()
     newdata= if(input$sompred_type=="Partition"){
       attr(m,"test")} else{
         vals$saved_data[[input$predsom_new]]
@@ -1636,7 +1687,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
   pred_som<-reactive({
     validate(need(!anyNA(newdata_som()),"NAs not allowed in the prediction Datalist"))
-    m<-vals$som_results
+    m<-getsom()
     som_pred<-predict(m,newdata = as.matrix(newdata_som()), whatmap = 1)
     #names(som_pred$predictions)<-c("X","Y")
     #names(som_pred$unit.classif)<-rownames(som_pred$predictions[[1]])
@@ -1678,7 +1729,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
 
   })
   output$som_errors<-renderUI({
-    res<-errors_som(vals$som_results)
+    res<-errors_som(getsom())
     res_names<-rownames(res)
     fluidRow(
       strong("Quality measures:"),
@@ -1694,7 +1745,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
       filename = function() {
         paste0("Kohonen","_", Sys.Date(),".rds")
       }, content = function(file) {
-        saveRDS(vals$som_results,file)
+        saveRDS(getsom(),file)
       })
   }
   get_supsom_list<-reactive({
@@ -1724,7 +1775,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
         npic = 0
       }
     p <-pcorr(
-      m=vals$som_results,
+      m=getsom(),
       npic = npic,
       indicate = input$vfm_type,
       pch = as.numeric(input$bmu_symbol),
@@ -1760,7 +1811,6 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
 
   topo.reactive <- reactive({
-
     df=data.frame(na.omit(getdata_som()))
     N<-nrow(getdata_som())
     SIZE<-sqrt(5*sqrt(N))
@@ -1768,13 +1818,12 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     if(!nrow(df)>0){
       c(L*L,L,L)
     } else{
-      topology(getdata_som(), dist = input$distmethod)
+      topology(na.omit(remove_var0(getdata_som())), dist = input$distmethod)
     }
   })
   getdata_som<-reactive({
-
-
     req(input$data_som)
+    req(length(vals$saved_data[[input$data_som]])>0)
     data_o<-data<-vals$saved_data[[input$data_som]]
     factors<-attr(data,"factors")
     #req(input$som_test_pick)
@@ -1798,7 +1847,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
   predsom.reactive<-reactive({
     #checkpredsom()
-    if(is.null(attr(vals$som_results,"supervisor"))){
+    if(is.null(attr(getsom(),"supervisor"))){
       tabsetPanel(id=ns("predsom_tab"),selected=vals$predsom_tab,
                   tabPanel(
                     strong("3.1. Results"),style="background: white",
@@ -1861,7 +1910,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     factors<-attr(vals$saved_data[[input$predsom_newY]],"factors")
     obs<-if(input$sompred_type=="Datalist"){
       factors[,input$predsom_y]
-    } else{attr(vals$som_results,"sup_test")[,input$predsom_y]}
+    } else{attr(getsom(),"sup_test")[,input$predsom_y]}
     pred<- pred_som()$prediction[[input$predsom_y]]
     pred<-factor(pred, levels=levels(obs))
     conf<-table(obs,pred)
@@ -1873,7 +1922,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
   bmu_p_factors_reac<-reactive({
     factors<-attr(vals$saved_data[[input$data_som]],"factors","factors")
-    m<-vals$som_results
+    m<-getsom()
     if (length(input$bmu_p_factors)>0) {
       c(factors[rownames(vals$saved_data[[input$data_som]],"factors"), input$bmu_p_factors],
         if(length(attr(m,"test"))>0) {factors[rownames(attr(m,"test")), input$bmu_p_factors]})
@@ -1888,7 +1937,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     req(input$bmu_p_border_grid)
     req(input$bmu_p_test)
     p<-pcorr(
-      m=vals$som_results,
+      m=getsom(),
       npic = 0,
       pch = as.numeric(input$bmu_p_symbol),
       labels.ind = bmu_p_factors_reac(),
@@ -1938,7 +1987,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
 
   train.summary<-reactive({
-    m<-vals$som_results
+    m<-getsom()
     traindata<-data.frame(m$data[[1]])
     mean = round(mean(unlist(traindata)), 2)
     n.obs = nrow(traindata)
@@ -1973,13 +2022,13 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
 
   observeEvent(input$som_results,{
-    if(attr(vals$som_results,"Method")=="Unsupervised"){
-      vals$cur_predsom_results<-vals$som_results
+    if(attr(getsom(),"Method")=="Unsupervised"){
+      vals$cur_predsom_results<-getsom()
     } else{
-      if(attr(vals$som_results,"som_type2")=="Numeric"){
-        vals$cur_predsom_results<-vals$som_results
+      if(attr(getsom(),"som_type2")=="Numeric"){
+        vals$cur_predsom_results<-getsom()
       } else{
-        cur_predsom_res3$df<-vals$som_results
+        cur_predsom_res3$df<-getsom()
       }
 
     }
@@ -2120,26 +2169,14 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   observeEvent(input$som_model_delete,{
     attr(vals$saved_data[[input$data_som]],"som")[[input$som_models]]<-NULL
   })
-  observe({
-    req(!is.null(re$df))
-    if(length(attr(vals$saved_data[[input$data_som]],"som"))>0)
-      updateTabsetPanel(session,"som_tab",re$df)
-  })
+
+
   observeEvent(input$som_tab,{
     vals$cursomtab<-input$som_tab
   })
 
 
-  observeEvent(input$trainSOM, {
-    vals$bagmodel<-T
-    vals$cur_train<-"new som (unsaved)"
-    updateTabsetPanel(session, "som_tab", "som_tab2")
-    updateTabsetPanel(session, "som_tab", "train_tab2")
-    updateTabsetPanel(session, "som_res", "train_tab1")
-    # updateSelectInput(session,"som_models",                      choices=c("new som (unsaved)", names(attr(vals$saved_data[[input$data_som]],"som"))))
-    updateSelectInput(session,"som_models",
-                      selected="new som (unsaved)")
-  })
+
   observeEvent(input$resetsom, {
     tunesom$rlen=500
     tunesom$distmethod="BrayCurtis"
@@ -2159,8 +2196,30 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     tunesom$neighbourhood.fct='bubble'
   })
 
+  getsom<-reactive({
+    req(input$som_models)
+    req(length(attr(getdata_som(),"som"))>0)
+    m<-attr(vals$saved_data[[input$data_som]],"som")[[input$som_models]]
+    req( class(m) == "kohonen")
+    m
+  })
+
+  go_som<-reactiveValues(df=F)
   observeEvent(input$trainSOM,{
+    vals$cur_train<-"new som (unsaved)"
+    vals$cursomtab<-'som_tab2'
+    vals$som_res<-'train_tab1'
+    go_som$df<-T
+  })
+
+
+  observeEvent(go_som$df,{
+    req(isTRUE(go_som$df))
+
+
     data = data.frame(getdata_som())
+
+
     data_o<-data.frame(vals$saved_data[[input$data_som]])
     test<-which(!rownames(data_o)%in%rownames(data))
     withProgress(message = "Running som... the time taken will depend on the size of the data and the training.",
@@ -2246,6 +2305,12 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
                      if(input$som_type2=="Factors"){attr(m,"faclist")<-attr(get_supsom_list(),"faclist")}}
                    attr(m,"coords")<-attr(data,"coords")
                    vals$som_unsaved<-m
+                   if(is.null(attr(data,"som"))){
+                     attr(vals$saved_data[[input$data_som]],"som")<-list()
+                   }
+                   attr(vals$saved_data[[input$data_som]],"som")[["new som (unsaved)"]]<-m
+                   go_som$df<-F
+                   beep(10)
 
                    m
 
@@ -2255,16 +2320,8 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
   observeEvent(input$resettopo, {
     output$somgridtopo<-renderUI({topocontrol()})})
-  observe({
 
-    req(input$som_models)
-    if(input$som_models=="new som (unsaved)"){
-      vals$som_results<-vals$som_unsaved
-    } else{
-      vals$som_results<-attr(vals$saved_data[[input$data_som]],"som")[[input$som_models]]}
-  })
-  observeEvent(input$data_som,{
-    updateTabsetPanel(session,'som_tab', 'som_tab1')})
+
   observeEvent(input$som_test_ref,{
     updateTabsetPanel(session,'som_tab', 'som_tab1')})
 
@@ -2285,8 +2342,8 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
       vals$hand_save<-"Save som predictions"
       vals$hand_save2<-NULL
       mess<-"Creates a Datalist with the SOM predictions"
-      if(attr(vals$som_results,"Method")!="Unsupervised"){
-        if(attr(vals$som_results,"som_type2")=="Numeric")
+      if(attr(getsom(),"Method")!="Unsupervised"){
+        if(attr(getsom(),"som_type2")=="Numeric")
         {
           mess<-paste(mess,"The defined name will be automatically followed by the '_X' tag. Y (numerical) predictions will also be automatically saved, with the '_Y' tag instead" )
         } else{
@@ -2470,7 +2527,9 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     data_overwritte$df<-F
     choices<-c(names(vals$saved_data))
     req(input$hand_save=="over")
-    if(vals$hand_save=='Save RF model in'){choices<-names(attr(vals$saved_data[[input$data_rfX]],'rf'))}
+    if(vals$hand_save=='Save new som in'){
+      choices<-names(attr(vals$saved_data[[input$data_som]],'som'))
+    }
     res<-pickerInput(ns("over_datalist"), NULL,choices, width="350px")
     data_overwritte$df<-T
     inline(res)
@@ -2532,9 +2591,9 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     vals$saved_data[[newsaveX]]<-predX
 
     if(input$hand_save=="create"){
-      if(attr(vals$som_results,"Method")!="Unsupervised"){
+      if(attr(getsom(),"Method")!="Unsupervised"){
         predY<- correctsom()$predY
-        if(attr(vals$som_results,"som_type2")=="Numeric"){
+        if(attr(getsom(),"som_type2")=="Numeric"){
           newsave<-paste(input$newdatalist,"_Y")
           predY<-data_migrate(data,predY,newsave)
           vals$saved_data[[newsave]]<-predY
@@ -2559,11 +2618,11 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   savesom<-reactive({
     curtab<-vals$cursomtab
     data<-getdata_som()
-    temp<-vals$som_results
+    temp<-getsom()
     bmu<-temp$unit.classif
     names(bmu)<-rownames(temp$data[[1]])
     bmu<-as.factor(bmu)
-    vals$bagmodel<-FALSE
+
     if(input$hand_save=="create"){
       temp<-list(temp)
       names(temp)<-input$newdatalist
@@ -2586,7 +2645,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
                       selected=cur)
     delay(500,{updateTabsetPanel(session, "som_tab", curtab)
       updateTabsetPanel(session, "som_res", vals$som_res)})
-
+    attr(vals$saved_data[[input$data_som]],"som")[["new som (unsaved)"]]<-NULL
   })
 
   datalist_som_errorsX<-reactive({

@@ -73,6 +73,8 @@ module_server_desctools<-function (input,output,session,vals,df_colors,newcolhab
            tabsetPanel(id=ns('desc_options'),selected = vals$cur_desc_options,
                        tabPanel('Summaries',
                                 uiOutput(ns('summaries_out'))),
+                       tabPanel('Missing data',
+                                uiOutput(ns('missing_data'))),
                        tabPanel('Ridges',
                                 uiOutput(ns('rid_panel'))),
                        tabPanel('Scatter',value="tab_scatter",
@@ -172,6 +174,250 @@ module_server_desctools<-function (input,output,session,vals,df_colors,newcolhab
     )
 
   })
+
+
+  getmissing<-reactive({
+    vals<-readRDS("savepoint.rds")
+    data<-vals$saved_data$zeu
+    req(is.data.frame(vals$saved_data[[input$data_upload0]]))
+    data=vals$saved_data[[input$data_upload0]]
+
+    image(as.matrix(data))
+
+    res0<-res<-which(is.na(data), arr.ind=TRUE)
+    if(length(res0)>0){
+      for(i in 1:nrow(res)){
+        res0[i,1]<-rownames(data)[res[i,1]]
+        res0[i,2]<-colnames(data)[res[i,2]]
+      }
+      colnames(res0)<-c("ID","Variable")
+      rownames(res0)<-NULL
+      res<-data.frame( table(res0[,2]))
+      colnames(res)<-c("Variable","Missing")
+      rownames(res)<-res[,1]
+      pic<-colnames(vals$saved_data[[input$data_upload0]])[which(colnames(vals$saved_data[[input$data_upload0]])%in%res[,1])]
+      res[,1]<-NULL
+      if(length(pic)>0)
+        res[pic,, drop=F]
+    }
+
+
+
+  })
+
+
+  get_dataord<-reactive({
+    req(input$missing_reorder!="N missing")
+    data=vals$saved_data[[input$data_upload0]]
+    dataord<-if(input$missing_reorder=="Factor"){
+      attr(data,"factors")    } else{data}
+    dataord
+  })
+
+
+
+  observeEvent(input$missing_id1,{
+    vals$missing_id1<-input$missing_id1
+  })
+  observeEvent(input$missing_id2,{
+    vals$missing_id2<-input$missing_id2
+  })
+  observeEvent(input$missing_var1,{
+    vals$missing_var1<-input$missing_var1
+  })
+  observeEvent(input$missing_var2,{
+    vals$missing_var2<-input$missing_var2
+  })
+  observeEvent(input$missing_reorder,{
+    vals$missing_reorder<-input$missing_reorder
+  })
+
+  observeEvent(input$missing_ord,{
+    vals$missing_ord<-input$missing_ord
+  })
+
+
+  output$missing_data<-renderUI({
+    sidebarLayout(
+      sidebarPanel(uiOutput(ns('missing_side'))),
+      mainPanel(uiOutput(ns('missing_plot')))
+    )
+  })
+
+  output$missing_side<-renderUI({
+    data=vals$saved_data[[input$data_upload0]]
+    if(is.null(vals$missing_id1)){
+      ob1<-rownames(data)[c(1,nrow(data))]
+      va1<-colnames(data)[c(1,ncol(data))]
+      vals$missing_id1<-ob1[1]
+      vals$missing_id2<-ob1[2]
+      vals$missing_var1<-va1[1]
+      vals$missing_var2<-va1[2]
+    }
+
+
+
+    div(class="map_control_style",style="color: #05668D",
+      div("Row:",
+          inline(pickerInput(ns("missing_id1"), NULL,rownames(data), selected=vals$missing_id1, width="100px")), strong("to"),inline(
+            pickerInput(ns("missing_id2"), NULL,rownames(data), selected=vals$missing_id2, width="100px")
+          )
+      ),
+      div("Col:",
+          inline(pickerInput(ns("missing_var1"), NULL,colnames(data), selected=vals$missing_var1, width="100px")), strong("to"),inline(
+            pickerInput(ns("missing_var2"), NULL,colnames(data), selected=vals$missing_var2, width="100px")
+          )
+      ),
+      div("Reorder",
+          inline(pickerInput(ns("missing_reorder"), NULL,c(
+            "N missing","Variable","Factor"
+          ), selected=vals$missing_reorder, width="100px")),
+          inline(uiOutput(ns("missing_ord")))
+      ),
+      div("+ Palette",
+        pickerInput(inputId=ns("missing_palette"),label = NULL,choices = vals$colors_img$val,choicesOpt = list(content = vals$colors_img$img),options=list(container="body"),selected=vals$colors_img$val[1], width='120px')
+      ),
+      div(
+        actionLink(ns('split_missing'),"+ Split into missing and non-missing", style="button_active")
+      ),
+      div(
+        actionLink(ns('missing_downp'),"+ Download plot", style="button_active")
+      ),
+
+      actionButton(ns("save_teste"),"SAVE")
+    )
+
+  })
+
+  observeEvent(input$split_missing,{
+
+    #vals<-readRDS("savepoint.rds")
+    #input<-readRDS('input.rds')
+    data=vals$saved_data[[input$data_upload0]]
+    req(any(is.na(data)))
+    factors<-attr(data,"factors")
+    coords<-attr(data,"coords")
+    colmiss<-getcol_missing(data)[,1]
+    comi<-which(colnames(data)%in%as.character(colmiss))
+    romi<-which(rownames(data)%in%as.character(getrow_missing(data)[,1]))
+
+    ylist<-list()
+    for(i in 1:length(comi)){
+      romipic<-which(is.na(data[,comi[i]]))
+      X=data[-romipic,-comi, drop=F]
+      attr(X,"factors")<-factors[rownames(X),]
+      attr(X,"coords")<-coords[rownames(X),]
+
+      Y=data[-romipic,comi[i], drop=F]
+      fac<-factors[rownames(Y),]
+      n_sample<-round(nrow(Y)*20/100)
+      part<-sample(1:nrow(Y),n_sample)
+      name0<-paste0("Partition_",colnames(Y))
+      name1<-make.unique(c(colnames(factors),name0), sep="_")
+      name_part<-name1[ncol(factors)+1]
+      fac[name_part]<-NA
+      fac[rownames(Y)[as.vector(part)] ,name_part]<-"test"
+      fac[rownames(Y)[-as.vector(part)] ,name_part]<-"training"
+      fac[name_part]<-factor(fac[,name_part])
+      attr(Y,"factors")<-fac
+      attr(Y,"coords")<-coords[rownames(Y),]
+      ylist[[i]]<-Y
+
+      newdata=data[romipic,-comi, drop=F]
+      attr(newdata,"factors")<-factors[rownames(newdata),]
+      attr(newdata,"coords")<-coords[rownames(newdata),]
+
+
+      name0<-paste0(input$data_upload0,"_COMP_X_to_", colnames(Y))
+      name1<-make.unique(c(names(vals$saved_data),name0), sep="_")
+      namemissing<-name1[length(vals$saved_data)+1]
+      vals$saved_data[[namemissing]]<-X
+
+      #name0<-paste0(input$data_upload0,"_COMP_Y_", colnames(Y))
+      # name1<-make.unique(c(names(vals$saved_data),name0), sep="_")
+      #namemissing<-name1[length(vals$saved_data)+1]
+      #vals$saved_data[[namemissing]]<-Y
+
+      name0<-paste0(input$data_upload0,"_MISS_newX_to_",colnames(Y))
+      name1<-make.unique(c(names(vals$saved_data),name0), sep="_")
+      namemissing<-name1[length(vals$saved_data)+1]
+      vals$saved_data[[namemissing]]<-newdata
+    }
+    datY<-mergedatacol(ylist)
+    name0<-paste0(input$data_upload0,"_COMP_Y_")
+    name1<-make.unique(c(names(vals$saved_data),name0), sep="_")
+    namemissing<-name1[length(vals$saved_data)+1]
+    vals$saved_data[[namemissing]]<-datY
+  })
+
+
+
+
+  observeEvent(input$missing_downp,{
+
+    vals$hand_plot<-"Missing plot"
+    module_ui_figs("downfigs")
+    mod_downcenter<-callModule(module_server_figs, "downfigs",  vals=vals)
+
+  })
+
+  output$missing_ord<-renderUI({
+    choices<-colnames(get_dataord())
+    pickerInput(ns("missing_ord"), NULL,choices, selected=vals$missing_ord, width="100px")
+  })
+
+
+
+
+  output$missing_plot<-renderUI({
+    req(input$missing_reorder)
+    data=vals$saved_data[[input$data_upload0]]
+
+
+    ob1<-c(input$missing_id1,input$missing_id2)
+    obs<-which(rownames(data)%in%ob1)
+    va1<-c(input$missing_var1,input$missing_var2)
+    var<-which(colnames(data)%in%va1)
+    pic_var<-seq(var[1],var[2])
+    pic_obs<-seq(obs[1],obs[2])
+    data<-data[pic_obs,pic_var]
+    renderPlot({
+      df<-data.frame(data)
+      df$nmissing<-apply(data,1,function(x) sum(is.na(x)))
+
+      if(input$missing_reorder=='N missing'){
+        a<-reshape2::melt(data.frame(id=rownames(df),df), c("id","nmissing"))
+        p<-ggplot(a,aes(reorder(variable,nmissing),reorder(id,nmissing)))+  geom_tile(aes(fill=value), color="black")+scale_fill_gradientn(colours=  vals$newcolhabs[[input$missing_palette]](100),na.value="black")
+      } else {
+        df<-data.frame(data)
+        df$nmissing<-apply(data,1,function(x) sum(is.na(x)))
+
+        req(input$missing_reorder)
+        dataord<-get_dataord()
+        ordvar<-dataord[,input$missing_ord]
+        df$ordvar<-ordvar
+        a<-reshape2::melt(data.frame(id=rownames(df),df), c("id","nmissing","ordvar"))
+
+        p<-ggplot(a,aes(reorder(variable,ordvar),reorder(id,ordvar)))+  geom_tile(aes(fill=value), color="black")+scale_fill_gradientn(colours=  vals$newcolhabs[[input$missing_palette]](100),na.value="black")
+      }
+      p<-p+theme(axis.text.x = element_text(angle = 45, hjust = 1))+xlab("Variables")+ylab("Observations")
+
+      vals$missing_plot<-p
+      vals$missing_plot
+    })
+  })
+
+
+
+observeEvent(input$save_teste,{
+  saveRDS(reactiveValuesToList(vals),"savepoint.rds")
+  saveRDS(reactiveValuesToList(input),"input.rds")
+  beep()
+  #vals<-readRDS("vals.rds")
+  #input<-readRDS('input.rds')
+
+})
+
 
 
 output$side_corplot<-renderUI({
@@ -463,8 +709,11 @@ pic_pca_results<-reactive({
       vals$showboxleg=F
       vals$cex_pbox=1
     }
-    ymin_box=floor(min(na.omit(res[,2])))
-    ymax_box=ceiling(max(na.omit(res[,2])))
+
+
+    prettyvec<-pretty(res[,2])
+    ymin_box=prettyvec[1]
+    ymax_box=prettyvec[length(prettyvec)]
 
     fluidRow(class="map_control_style",style="color: #05668D",
              div(span('+ Title:',
@@ -506,7 +755,7 @@ pic_pca_results<-reactive({
              column(12,style="border-top: 1px solid #05668D;border-bottom: 1px solid #05668D",
                     fluidRow(
                       div(uiOutput(ns("box_xaxis"))),
-                      column(12,
+                      column(12,id=ns("pbox_xaxis"),
                              div(span('+ Label:',
                                       inline(
                                         textInput(ns("box_xlab_text"),NULL , value=input$box_factor, width="120px")
@@ -528,7 +777,7 @@ pic_pca_results<-reactive({
                                numericInput(ns("box_srt"),NULL,value=vals$box_srt,step=1, width="75px")
                              ))),
                              div(span("+ Axis lab-adjust:",inline(
-                               numericInput(ns("box_xlab.adj"),NULL,value=vals$box_xlab.adj,step=1, width="55px")
+                               numericInput(ns("box_xlab.adj"),NULL,value=0,step=1, width="55px")
                              ))))
                     )
              ),
@@ -550,7 +799,7 @@ pic_pca_results<-reactive({
                                pickerInput(ns("box_ylab_font"),NULL,choices=c("plain","bold","italic","bold_italic"), width="80px", selected=vals$box_ylab_font)
                              ))),
                              div(span("+ Label adjust:",inline(
-                               numericInput(ns("box_ylab_adj"),NULL,value=vals$box_ylab_adj,step=.1, width="75px")
+                               numericInput(ns("box_ylab_adj"),NULL,value=0,step=.1, width="75px")
                              ))),
 
                              div(span("+ Axis size:",inline(
@@ -566,6 +815,7 @@ pic_pca_results<-reactive({
                       )
                     )
              ),
+
              column(12,style="border-top: 1px solid #05668D;",
 
                     span("+ Tick size:",inline(
@@ -592,6 +842,7 @@ pic_pca_results<-reactive({
     )
 
   })
+
 
 
   observeEvent(input$cex_pbox,{vals$cex_pbox<-input$cex_pbox})
