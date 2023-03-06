@@ -43,45 +43,8 @@ gethex<-function(m){
 
 
 
-get_neurons<-function(m,background_type=NULL,property=NULL,hc=NULL){
-  hexs<-gethex(m)
-  if(is.null(background_type)){
-    hc<-rep("None", length(hexs))
-    leg_name<-NULL
-    backtype<-"None"
-  } else {
-    if(background_type=="uMatrix"){
-      leg_name<-"Distance"
-      nhbrdist <- unit.distances(m$grid)
-      cddist <- as.matrix(object.distances(m, type = "codes"))
-      cddist[abs(nhbrdist - 1) > 0.001] <- NA
-      neigh.dists <- colMeans(cddist, na.rm = TRUE)
-      #dists<-as.matrix(kohonen::object.distances(m,"codes"))
-      hc <- neigh.dists
-      backtype<-"uMatrix"
 
-    } else  if(background_type=="property") {
-      leg_name<-property
-      hc<-do.call(cbind,m$codes)[,property]
-      backtype<-"property"
-    } else  if(background_type=="hc") {
-      leg_name<-"Group"
 
-      hc<-hc
-      backtype<-"hc"
-    }
-  }
-
-  hexs2<-lapply(1:length(hexs),function(i){
-    x<-hexs[[i]]
-    x$group<-hc[i]
-    x
-  })
-  attr(hexs2,'pxpy')<-attr(hexs,'pxpy')
-  attr(hexs2,"backtype")<-backtype
-  attr(hexs2,"leg_name")<-leg_name
-  hexs2
-}
 
 getcopoints<-function(m){
   pxpy<-getpxpy(m)
@@ -158,7 +121,100 @@ getbp_som<-function(m,indicate,npic,hc){
 }
 
 
-bmu_plot<-function(m,hexs,points_tomap=NULL,bp=NULL,points=T,points_size=2,points_palette="turbo",pch=16,text=F,text_factor=NULL,text_size=1.5,text_palette="turbo",bg_palette="viridis",newcolhabs= vals$newcolhabs,bgalpha=1,border="white",indicate=NULL,cex.var=1,col.text="black",col.bg.var="white",col.bg.var.alpha=.8, newdata=NULL, show_error=NULL,base_size=12,show_neucoords=T,title="") {
+get_neurons<-function(m,background_type=NULL,property=NULL,hc=NULL){
+  hexs<-gethex(m)
+  if(is.null(background_type)){
+    hc<-rep("None", length(hexs))
+    leg_name<-NULL
+    backtype<-"None"
+  } else {
+    if(background_type=="uMatrix"){
+      leg_name<-"Distance"
+      nhbrdist <- unit.distances(m$grid)
+      cddist <- as.matrix(object.distances(m, type = "codes"))
+      cddist[abs(nhbrdist - 1) > 0.001] <- NA
+      neigh.dists <- colMeans(cddist, na.rm = TRUE)
+      #dists<-as.matrix(kohonen::object.distances(m,"codes"))
+      hc <- neigh.dists
+      backtype<-"uMatrix"
+
+    } else  if(background_type=="property") {
+      leg_name<-property
+      hc<-do.call(cbind,m$codes)[,property]
+      backtype<-"property"
+    } else  if(background_type=="hc") {
+      leg_name<-"Group"
+
+      hc<-hc
+      backtype<-"hc"
+    }
+  }
+
+  hexs2<-lapply(1:length(hexs),function(i){
+    x<-hexs[[i]]
+    x$group<-hc[i]
+    x
+  })
+  attr(hexs2,'pxpy')<-attr(hexs,'pxpy')
+  attr(hexs2,"backtype")<-backtype
+  attr(hexs2,"leg_name")<-leg_name
+  hexs2
+}
+
+get_neurons_hc<-function(m,background_type=NULL,property=NULL,hc=NULL){
+  rephc<-if(m$grid$topo=="hexagonal"){7} else{5}
+  group_res<-group<-rep("None", each=nrow(m$grid$pts))
+  if(is.null(background_type)){
+    leg_name<-NULL
+    backtype<-"None"
+  } else {
+    if(background_type=="uMatrix"){
+
+
+      leg_name<-"Distance"
+      nhbrdist <- unit.distances(m$grid)
+      cddist <- as.matrix(object.distances(m, type = "codes"))
+      cddist[abs(nhbrdist - 1) > 0.001] <- NA
+      neigh.dists <- colMeans(cddist, na.rm = TRUE)
+      #dists<-as.matrix(kohonen::object.distances(m,"codes"))
+      hc <- neigh.dists
+      backtype<-"uMatrix"
+      group<-rep(hc, each=rephc)
+      group_res<-as.numeric(as.vector(unlist(split(group,rep(1:nrow(m$grid$pts), each=rephc)))))
+
+
+
+    } else  if(background_type=="property") {
+      leg_name<-property
+      hc<-do.call(cbind,m$codes)[,property]
+      backtype<-"property"
+      group<-rep(hc, each=rephc)
+      group_res<-as.numeric(as.vector(unlist(split(group,rep(1:nrow(m$grid$pts), each=rephc)))))
+
+    } else  if(background_type=="hc") {
+      leg_name<-"Group"
+
+      hc<-hc
+      backtype<-"hc"
+      group<-rep(hc, each=rephc)
+      group_res<-factor(as.vector(unlist(split(group,rep(1:nrow(m$grid$pts), each=rephc)))))
+
+    }
+  }
+
+  attr(group_res,"backtype")<-backtype
+  attr(group_res,"leg_name")<-leg_name
+  group_res
+}
+
+new_scale<-function (new_aes) {
+  structure(ggplot2::standardise_aes_names(new_aes), class = "new_aes")
+}
+new_scale_fill<-function () {
+  new_scale("fill")
+}
+
+bmu_plot<-function(m,hexs,points_tomap=NULL,bp=NULL,points=T,points_size=2,points_palette="turbo",pch=16,text=F,text_factor=NULL,text_size=1.5,text_palette="turbo",bg_palette="viridis",newcolhabs= vals$newcolhabs,bgalpha=1,border="white",indicate=NULL,cex.var=1,col.text="black",col.bg.var="white",col.bg.var.alpha=.8, newdata=NULL, show_error=NULL,base_size=12,show_neucoords=T,title="", hc=NULL) {
 
   if(!is.factor(points_tomap$point)){
     points_tomap$point<-factor(points_tomap$point)
@@ -166,6 +222,8 @@ bmu_plot<-function(m,hexs,points_tomap=NULL,bp=NULL,points=T,points_size=2,point
   if(!is.factor(points_tomap$label)){
     points_tomap$label<-factor(points_tomap$label)
   }
+
+
   hc<-do.call(c,lapply(hexs,function(x) x$group[1]))
   req(length(hc[1])>0)
   if(hc[1]=="None"){
@@ -242,7 +300,7 @@ bmu_plot<-function(m,hexs,points_tomap=NULL,bp=NULL,points=T,points_size=2,point
 
     if(isTRUE(text)){
       req(length(points_tomap)>0)
-      coltext<-newcolhabs[[text_palette]](nlevels(points_tomap$label))
+      coltext<-newcolhabs[[text_palette]](1)
       p<- p+geom_text(data=points_tomap, aes(x_pt, y_pt, label=label),size=text_size+3,col=coltext)
     }
 

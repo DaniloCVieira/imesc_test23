@@ -2,8 +2,8 @@
 #' @export
 module_ui_kmeans <- function(id){
   ns<-NS(id)
-  column(12,
-         inline( actionButton(ns("teste_comb"),"SAVE")),
+  div(class='choosechannel',
+         #inline( actionButton(ns("teste_comb"),"SAVE")),
          div(span(
            inline(uiOutput(ns('kmeans_inputs')))
          )) ,

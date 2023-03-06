@@ -9,8 +9,8 @@ module_ui_comp2 <- function(id){
 
 
     div(
-      inline( actionButton(ns("teste_comb"),"SAVE")),
-      #inline(uiOutput(ns("teste_comb")))
+      #inline( actionButton(ns("teste_comb"),"SAVE")),
+      inline(uiOutput(ns("teste_comb")))
     ),
     uiOutput(ns('COMB_comp2')))
 
@@ -80,7 +80,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
                                     value='tab2',
                                     uiOutput(ns("Model_tab2"))
                            ),
-                           tabPanel(strong("4.3. Performace loss"),
+                           tabPanel(strong("4.3. Permutation Importance"),
                                     value='tab3',
                                     uiOutput(ns("Model_tab3"))
                            ))),
@@ -107,7 +107,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
                              value="tab5",
                              uiOutput(ns("Ensemble_tab5"))
                     ),
-                    tabPanel(strong("5.5. Performace loss"),
+                    tabPanel(strong("5.5. Permutation Importance"),
                              value='tab5b',
                              uiOutput(ns("Ensemble_tab5b"))
                     ),
@@ -119,10 +119,8 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
                              ),
                              uiOutput(ns("Ensemble_tab6")),
                              uiOutput(ns("interactions_out"))
-                    ),
-                    tabPanel(strong("5.7. Teste"),
-                             value='tab7',
-                             uiOutput(ns("sig_forward")))
+                    )
+
 
                   )
 
@@ -133,7 +131,8 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
       )
       )
   })
-  output$Model_tab3<-renderUI({
+
+  permimp_model_args<-reactive({
     req(input$data_ensemble_X)
     req(input$ensemble_models)
     req(input$pal_combine)
@@ -144,33 +143,43 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     palette<-input$pal_combine
     sigvars<-attr(attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$scoreloss_models,'sigvars')
     acc<-getacc_models()
-    #acc<-attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[input$ensemble_models]]$models_resampling
+    acc<-attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[input$ensemble_models]]$models_resampling
     req(length(acc)>0)
+    args<-list(
+
+      moldels_importance=NULL,
+      palette=palette,
+      newcolhabs=vals$newcolhabs,
+      colby="acc",
+      aculoss=1,
+      nvars=input$aculoss_npic,
+      sig=input$aculoss_sig,
+      xlab=input$feaimp_xlab,
+      ylab=input$feaimp_ylab,
+      leg=input$feaimp_leg,
+      cex.axes=input$feaimp_cex.axes,
+      cex.lab=input$feaimp_cex.lab,
+      cex.main=input$feaimp_cex.main,
+      cex.leg=input$feaimp_cex.leg,
+      sigvars=sigvars,
+      acc=acc,
+      facet_grid=T,
+      modelist=vals$modellist2
+
+    )
+    args
+
+
+  })
+
+  output$Model_tab3<-renderUI({
+
+    args<-permimp_model_args()
+    #args<-readRDS("args.rds")
 
     renderPlot({
-      p<-plot_model_features(
-        moldels_importance=NULL,
-        palette=palette,
-        newcolhabs=vals$newcolhabs,
-        colby="acc",
-        aculoss=1,
-        nvars=input$aculoss_npic,
-        sig=input$aculoss_sig,
-        xlab=input$feaimp_xlab,
-        ylab=input$feaimp_ylab,
-        leg=input$feaimp_leg,
-        cex.axes=input$feaimp_cex.axes,
-        cex.lab=input$feaimp_cex.lab,
-        cex.main=input$feaimp_cex.main,
-        cex.leg=input$feaimp_cex.leg,
-        sigvars=sigvars,
-        acc=acc,
-        facet_grid=T,
-        modelist=vals$modellist2
-      )
-      p
+      p<-do.call(plot_model_features,args)
       vals$feaimp_plot2<-p
-
       vals$feaimp_plot2
     })
 
@@ -418,7 +427,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   })
   output$inter_method<-renderUI({
     div(div(strong("3. Method:")),
-        div( pickerInput(ns("inter_method"),NULL,c("Paired","Forward","Backward")
+        div( pickerInput(ns("inter_method"),NULL,c("Paired","Forward")
                          ,selected=vals$inter_method
 
                          )))
@@ -453,23 +462,36 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
         div(
           checkboxInput(ns("en_scale"), "+ Scale importances", vals$en_scale)
         ),
-        div(
-          inline(checkboxInput(ns("score_loss"), NULL, vals$score_loss)),
-          inline(
-            span("Score loss",inline(actionLink(ns("help_loss"),icon("fas fa-question-circle")))))),
-        div(
-          div(style="margin-left: 5px;",
+        hr(),
+        uiOutput(ns('perm_imp'))
 
-              uiOutput(ns('en_rep')),
-              uiOutput(ns('side_sig_aculoss')),
-              uiOutput(ns('run_aculoss'))
-
-
-          ),
-          hr()
-        )
     )
   })
+
+  output$perm_imp<-renderUI({
+    if(input$ensemble_tab=='tab1'){
+      req(input$ensemble_tab1=="tab3")}
+
+    if(input$ensemble_tab=='tab2'){
+      req(input$ensemble_tab2=="tab5b")}
+    div(
+      div(
+        strong("Permutation Importance",inline(actionLink(ns("help_loss"),icon("fas fa-question-circle"))))),
+      div(
+        div(style="margin-left: 5px;",
+
+            uiOutput(ns('en_rep')),
+            uiOutput(ns('side_sig_aculoss')),
+            uiOutput(ns('run_aculoss'))
+
+
+        ),
+        hr()
+      )
+
+    )
+  })
+
   observeEvent(input$en_scale,
                vals$en_scale<-input$en_scale)
 
@@ -480,9 +502,20 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   observeEvent(input$help_loss,{
     showModal(
       modalDialog(
-        div("If checked, variable importance variable is calculated as the difference in mean performace metric (MPM) on the out-of bag data and the MPM, also using the out-of-bag data, calculated after permuting observed values for a predictor. The function considers as MPM the Accuracy and Rsquared metrics in classification and regression models,respectivelly."),
+        div(p("The permutation feature importance algorithm is based on Fisher, Rudin, and Dominici (2018). "),
+            p("For each predictor ",em('j')," in the dataset:"),
+            div(style="margin-left: 10px",
+              p(
+                p("1. Permute feature ",em('j')," in the data X."),
+                p('2. Estimate the  performace metric based on the predictions of the permuted data.'),
+                p("3. Calculate permutation feature importance ",  HTML(paste0("P",tags$sub("j")))," as the difference between prediction errors before and after the feature is permuted.")
+              )),
+
+            p("In iMESC, this process is repeated ",em("n")," times, and the significance of the feature is calculated using a one-sided t-test,  which tests if the mean feature metric ",  HTML(paste0("P",em(tags$sub("j")))),"is higher than the average of the remaining feature metrics",  HTML(paste0("P",em(tags$sub("-j")))),"."
+            )
+            ),
         title="Permutation-based variable importance",
-        easyClose =
+        easyClose =T
       )
     )
   })
@@ -500,7 +533,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
       div("+ Label size",inline(numericInput(ns("feaimp_cex.leg"),NULL, value=13, width="75px", step=1))),
       div("+ Xlab",inline(textInput(ns("feaimp_xlab"), NULL, 'Variables', width="200px"))),
       div("+ ylab",inline(textInput(ns("feaimp_ylab"), NULL, 'Importance', width="200px"))),
-      div("+ Legend title",inline(textInput(ns("feaimp_leg"), NULL, if(isFALSE(input$score_loss)) {'Model'}else{"Score loss"}, width="200px")))
+      div("+ Legend title",inline(textInput(ns("feaimp_leg"), NULL, if(isFALSE(input$score_loss)) {'Model'}else{"Perm Importance"}, width="200px")))
     )
   })
 
@@ -514,18 +547,11 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
 
 
   output$side_sig_aculoss<-renderUI({
-    if(input$ensemble_tab=='tab1'){
-      req(input$ensemble_tab1!="tab1")}
-    if(input$ensemble_tab=='tab2'){
-      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab5b")}
-    req(isTRUE(input$score_loss))
-    #req(length(vals$aculoss_ensemble)>0|length(scoreloss_models())>0)
-
     div(
       div(
         span(
           column(12,"+ Sig level:"),
-          div(inline(numericInput(ns("aculoss_sig"),NULL, value=0.01, width="75px", step=0.02)), inline(tiphelp("perfomace loss higher then")))
+          div(inline(numericInput(ns("aculoss_sig"),NULL, value=0.05, width="75px", step=0.02)), inline(tiphelp("perfomace loss higher then")))
 
 
         )
@@ -559,7 +585,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   })
 
   output$en_rep<-renderUI({
-    req(isTRUE(input$score_loss))
+
     if(is.null(vals$aculoss_rep)){vals$aculoss_rep<-5}
     div(
       span("+ Repetions:",
@@ -570,9 +596,9 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     )
   })
   output$run_aculoss<-renderUI({
-    req(isTRUE(input$score_loss))
+
     #req(is.null(vals$aculoss))
-    div(class="save_changes",actionButton(ns("run_aculoss"),"+ Calculate Score Loss"))
+    div(class="save_changes",actionButton(ns("run_aculoss"),"+ Calculate Permutation Importance"))
   })
 
 
@@ -587,42 +613,43 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     allimportance<- comb_feaimp(vals$modellist2,  scale=input$en_scale,progress = T)
   })
 
+
+ plotargs_models_feaimp<-reactive({
+
+   req(input$pal_combine)
+   req(input$feaimp_xlab)
+   req(input$feaimp_ylab)
+   req(input$feaimp_leg)
+   palette<-input$pal_combine
+   modelist<-vals$modellist2
+   allimportance<-comb_feaimp.reac()
+
+
+   moldels_importance<-allimportance
+   args<-list(
+     moldels_importance=moldels_importance,
+     palette=palette,
+     newcolhabs=vals$newcolhabs,
+     colby='models',
+     aculoss=NULL,
+     nvars=input$aculoss_npic,
+     sig=input$aculoss_sig,
+     xlab=input$feaimp_xlab,
+     ylab=input$feaimp_ylab,
+     leg=input$feaimp_leg,
+     cex.axes=input$feaimp_cex.axes,
+     cex.lab=input$feaimp_cex.lab,
+     cex.main=input$feaimp_cex.main,
+     cex.leg=input$feaimp_cex.leg
+   )
+   args
+
+ })
+
   output$Model_tab2<-renderUI({
-
-    req(input$pal_combine)
-    req(input$feaimp_xlab)
-    req(input$feaimp_ylab)
-    req(input$feaimp_leg)
-    palette<-input$pal_combine
-    modelist<-vals$modellist2
-
-    if(isTRUE(input$score_loss)){
-      req(length(scoreloss_models())>0)
-      req(input$aculoss_sig)
-      aculoss<-scoreloss_models()
-    } else{
-      aculoss<-NULL
-    }
-    allimportance<-comb_feaimp.reac()
-    moldels_importance<-allimportance
-
+    args<-plotargs_models_feaimp()
     renderPlot({
-      vals$feaimp_plot1<-plot_model_features(
-        moldels_importance,
-        palette=palette,
-        vals$newcolhabs,
-        colby=colby(),
-        aculoss=aculoss,
-        nvars=input$aculoss_npic,
-        sig=input$aculoss_sig,
-        xlab=input$feaimp_xlab,
-        ylab=input$feaimp_ylab,
-        leg=input$feaimp_leg,
-        cex.axes=input$feaimp_cex.axes,
-        cex.lab=input$feaimp_cex.lab,
-        cex.main=input$feaimp_cex.main,
-        cex.leg=input$feaimp_cex.leg
-      )
+      vals$feaimp_plot1<-do.call(plot_model_features,args)
       vals$feaimp_plot1
     })
 
@@ -640,7 +667,8 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     acc
   })
 
-  output$Ensemble_tab5b<-renderUI({
+
+  getargs_plot_scoreloss<-reactive({
     req(input$data_ensemble_X)
     req(input$ensemble_models)
 
@@ -655,35 +683,47 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     sigvars<-attr(attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$scoreloss_ensemble,'sigvars')
     acc<-getacc()
     req(length(acc>0))
-    renderPlot({
-      p<-plot_model_features(
-        moldels_importance=NULL,
-        palette=palette,
-        newcolhabs=vals$newcolhabs,
-        colby="acc",
-        aculoss=1,
-        nvars=input$aculoss_npic,
-        sig=input$aculoss_sig,
-        xlab=input$feaimp_xlab,
-        ylab=input$feaimp_ylab,
-        leg=input$feaimp_leg,
-        cex.axes=input$feaimp_cex.axes,
-        cex.lab=input$feaimp_cex.lab,
-        cex.main=input$feaimp_cex.main,
-        cex.leg=input$feaimp_cex.leg,
-        sigvars=sigvars,
-        acc=acc,
-        facet_grid=F
-      )
-      p
-      vals$feaimp_plot2<-p
 
-      vals$feaimp_plot2
-    })
+    args<-list(
 
+      moldels_importance=NULL,
+      palette=palette,
+      newcolhabs=vals$newcolhabs,
+      colby="acc",
+      aculoss=1,
+      nvars=input$aculoss_npic,
+      sig=input$aculoss_sig,
+      xlab=input$feaimp_xlab,
+      ylab=input$feaimp_ylab,
+      leg=input$feaimp_leg,
+      cex.axes=input$feaimp_cex.axes,
+      cex.lab=input$feaimp_cex.lab,
+      cex.main=input$feaimp_cex.main,
+      cex.leg=input$feaimp_cex.leg,
+      sigvars=sigvars,
+      acc=acc,
+      facet_grid=F
+
+    )
+    args
   })
 
-  output$Ensemble_tab5<-renderUI({
+
+  output$Ensemble_tab5b<-renderUI({
+    req(!is.null(attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")))
+    acc<-attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$ensemble_resampling
+    validate(need(length(acc)>0,"Click in the flashing blue button 'Calculate Permutation Importance'"))
+
+    args<-getargs_plot_scoreloss()
+
+    p<-do.call(plot_model_features,args)
+    vals$ensemble_permimp<-p
+    renderPlot({vals$ensemble_permimp})
+  })
+
+
+
+  getargs_ensemble_feaimp<-reactive({
     req(!is.null(get_predtab()))
     req(input$pal_combine)
     req(input$feaimp_xlab)
@@ -705,25 +745,33 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     mean_importance<-get_weig_faimp(allimportance, en_method=input$en_method, weis=weis)
     moldels_importance<-data.frame(mean_importance)
     aculoss<-scoreloss_ensemble()
+    args<-list(
+      moldels_importance=moldels_importance,
+      palette=palette,
+      newcolhabs=vals$newcolhabs,
+      colby="acculoss",
+      aculoss=aculoss,
+      nvars=input$aculoss_npic,
+      sig=input$aculoss_sig,
+      xlab=input$feaimp_xlab,
+      ylab=input$feaimp_ylab,
+      leg=input$feaimp_leg,
+      cex.axes=input$feaimp_cex.axes,
+      cex.lab=input$feaimp_cex.lab,
+      cex.main=input$feaimp_cex.main,
+      cex.leg=input$feaimp_cex.leg,
+      sigvars=NULL,
+      facet_grid=F
+    )
+
+    args
+  })
+
+  output$Ensemble_tab5<-renderUI({
+   args<-getargs_ensemble_feaimp()
+
     renderPlot({
-      vals$feaimp_plot2<-plot_model_features(
-        moldels_importance,
-        palette=palette,
-        newcolhabs=vals$newcolhabs,
-        colby=colby(),
-        aculoss=aculoss,
-        nvars=input$aculoss_npic,
-        sig=input$aculoss_sig,
-        xlab=input$feaimp_xlab,
-        ylab=input$feaimp_ylab,
-        leg=input$feaimp_leg,
-        cex.axes=input$feaimp_cex.axes,
-        cex.lab=input$feaimp_cex.lab,
-        cex.main=input$feaimp_cex.main,
-        cex.leg=input$feaimp_cex.leg,
-        sigvars=attr(attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$scoreloss_ensemble,'sigvars'),
-        facet_grid=F
-      )
+      vals$feaimp_plot2<-do.call(plot_model_features,args)
       vals$feaimp_plot2
     })
 
@@ -1398,12 +1446,35 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     names(res0[res0==T])
   })
 
-  observeEvent(input$teste_comb,{
-    saveRDS(reactiveValuesToList(vals),"savepoint.rds")
+
+
+
+  savereac<-reactive({
+
+
+
+    tosave<-isolate(reactiveValuesToList(vals))
+    tosave<-tosave[-which(names(vals)%in%c("saved_data","newcolhabs",'colors_img'))]
+    tosave<-tosave[-which(unlist(lapply(tosave,function(x) object.size(x)))>1000)]
+    tosave$saved_data<-vals$saved_data
+    tosave$newcolhabs<-vals$newcolhabs
+    tosave$colors_img<-vals$colors_img
+    tosave$ensemble_args<-getargs_root()
+    tosave$ensemble_args_plot<-getargs_plot_scoreloss()
+    #tosave$ensemble_args_feaimp<-getargs_ensemble_feaimp()
+   # tosave$permimp_model_args<-permimp_model_args()
+    #
+    #
+
+    saveRDS(tosave,"savepoint.rds")
     saveRDS(reactiveValuesToList(input),"input.rds")
     beep()
     #vals<-readRDS("vals.rds")
     #input<-readRDS('input.rds')
+
+  })
+  observeEvent(input$teste_comb,{
+    savereac()
   })
   output$cmcomb<-renderUI({
 
@@ -1743,7 +1814,7 @@ p(
   output$side_download_plot<-renderUI({
     req(input$ensemble_tab)
     if(input$ensemble_tab=="tab1"){req(input$ensemble_tab1=="tab2")} else{
-      req(input$ensemble_tab2 %in% c('tab2','tab4',"tab5",'tab6'))
+      req(input$ensemble_tab2 %in% c('tab2','tab4',"tab5",'tab6',"tab5b"))
       if(input$ensemble_tab2=="tab6"){
         req(!is.null(get_inter_res0()))
         req(!is.null(vals$inter_res))
@@ -1787,6 +1858,10 @@ p(
              },
              "tab5"={
                vals$plot_ensemble<-vals$feaimp_plot2
+               "ensemble_feature_importance_plot"
+             },
+             "tab5b"={
+               vals$plot_ensemble<-vals$ensemble_permimp
                "ensemble_feature_importance_plot"
              },
              "tab6"={
@@ -2401,7 +2476,7 @@ p(
       get_scoreloss_ensemble()
     }
   })
-  get_scoreloss_ensemble<-reactive({
+  getargs_root<-reactive({
     req(input$ensemble_models)
     predtab<-get_predtab()
     obc<-get_obc()
@@ -2421,12 +2496,36 @@ p(
     accu<-if(m$modelType=="Classification"){accu["Accuracy"]
     } else{accu['Rsquared']}
 
-    acc<-getroot(newdata,obc,reps=input$aculoss_rep,modelist,weis,accu, scale=input$en_scale,top.features=ncol(newdata), root=NULL,inter_method="Paired", progress=T)
+
+    args<-list(
+      newdata=newdata,
+      obc=obc,
+      reps=input$aculoss_rep,
+      modelist=modelist,
+      weis=weis,
+      accu=accu,
+      scale=input$en_scale,
+      en_method=input$en_method,
+      top.features=ncol(newdata),
+      root=NULL,
+      inter_method="Paired",
+      progress=T,
+      ms=NULL,
+      type="modelist",
+      feaimp=F
+    )
+    args
+  })
+  get_scoreloss_ensemble<-reactive({
+    args<-getargs_root()
+    vals$ensemble_args<-args
+    acc<-do.call(getroot,args)
+
     rep200<-getsig_aculoss(acc,accu=NULL,sig=input$aculoss_sig)
     attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$ensemble_resampling<-acc
     attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$scoreloss_ensemble<-rep200
     updateTabsetPanel(session,"ensemble_tab","tab2")
-    updateTabsetPanel(session,"ensemble_tab2","tab5")
+    updateTabsetPanel(session,"ensemble_tab2","tab5b")
 
   })
   get_scoreloss_models<-reactive({
@@ -2439,15 +2538,27 @@ p(
     #pred<-get_pred()
     weis=rep(1,length(modelist))
     accu<-get_model_performaces()
-    #saveRDS(reactiveValuesToList(vals),"savepoint.rds")
-    # saveRDS(reactiveValuesToList(input),"input.rds")
-    # beep()
 
-    withProgress(min=0,max=length(modelist), message="Calculating score loss ...",{
+
+    withProgress(min=0,max=length(modelist), message="Calculating Permutation Importance ...",{
       resultnovo<-lapply(1:length(modelist),function(i){
         m<-modelist[[i]]
         ac<-accu[[i]]
-        acc<-getroot(newdata,obc,reps=input$aculoss_rep,modelist,weis,ac, scale=input$en_scale,top.features=ncol(newdata), root=NULL,inter_method="Paired", progress=T, type="model",ms=m)
+        acc<-getroot(newdata=newdata,
+                     obc=obc,
+                     reps=input$aculoss_rep,
+                     modelist=modelist,
+                     weis=weis,
+                     accu=ac,
+                     scale=input$en_scale,
+                     en_method=input$en_method,
+                     top.features=ncol(newdata),
+                     root=NULL,
+                     inter_method="Paired",
+                     progress=T,
+                     ms=m,
+                     type="model",
+                     feaimp=F)
         res<-getsig_aculoss(acc, NULL,sig=input$aculoss_sig)
         incProgress(1, message=paste0('model:',names(modelist)[i]))
         list(res, acc)
@@ -2464,7 +2575,7 @@ p(
     attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$models_resampling<-acc
     attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$scoreloss_models<-result
     updateTabsetPanel(session,"ensemble_tab","tab1")
-    updateTabsetPanel(session,"ensemble_tab1","tab2")
+    updateTabsetPanel(session,"ensemble_tab1","tab3")
   })
   get_OBC<-reactive({
     req(length(input$obc)>0)

@@ -12,12 +12,13 @@ module_ui_somplot <- function(id){
 #' @export
 #'
 module_server_somplot <- function(input, output, session,vals,data_target,som_model,background_type="hc",property=NULL,hc=NULL,
-                                  map_newdata=F,df_symbol,df_colors) {
+                                  map_newdata=F,df_symbol,df_colors,col_grad=NULL) {
   ns <- session$ns
 
 
   somplot_args<-reactiveValues(df=NULL)
   somval<-reactiveValues(hc=hc)
+  req(data_target%in%names(vals$saved_data))
   data<-vals$saved_data[[data_target]]
   getsolid_col<-reactive({
     res<-lapply(vals$newcolhabs, function(x) x(10))
@@ -30,7 +31,8 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
   get_model <- reactive({
 
     if(isFALSE(map_newdata)){
-      return(attr(data,"som")[[as.character(som_model)]])
+      m<-attr(data,"som")[[as.character(som_model)]]
+      return(m)
     } else{
       #input<-list()
       #input$newdata<-choices[1]
@@ -50,12 +52,12 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
 
 
 
+
       mnew$codes<-list(unit.predictions)
       somplot_args$som_model_pred<-mnew
       m<-mnew
-      if(isTRUE(map_newdata)) {
-        somval$hc<-factor(cutsom(m=m,
-                                 groups=vals$saved_kcustom,
+      somval$hc<-if(isTRUE(map_newdata)) {
+       factor(cutsom(m=m,groups=vals$saved_kcustom,
                                  method.hc=vals$method.hc0,
                                  palette=NULL,
                                  newcolhabs=vals$newcolhabs,
@@ -75,6 +77,14 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
     pic
   })
   get_choices_pal<-reactive({
+    if(!is.null(col_grad)){
+      title="+ Background palette"
+      somplot_args$somplot_bg<-"turbo"
+      choices=getgrad_col()
+      attr(choices,"title")<-title
+      return(choices)
+    }
+
 
     if(background_type!="hc") {
       req(length(input$plus_umatrix)>0)
@@ -130,7 +140,7 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
     }
     div(class="map_control_style",style="color: #05668D",
         div(
-          #inline( actionButton(ns("teste_comb"),"SAVE")),
+         # inline( actionButton(ns("teste_comb"),"SAVE")),
           uiOutput(ns('newdata')),
           #uiOutput("somcut_display"),
           uiOutput(ns('hc_palette')),
@@ -167,7 +177,7 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
 
   output$theme<-renderUI({
     if(is.null(somplot_args$theme)){
-      somplot_args$theme<-T
+      somplot_args$theme<-F
     }
     div(style='border-bottom: 1px solid gray',
         inline(checkboxInput(ns("theme"),
@@ -190,14 +200,15 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
     somplot_args$pclus_addpoints<-input$pclus_addpoints
   })
   output$umapro<-renderUI({
-    req(background_type!="hc")
+    req(is.null(col_grad))
     div(style='border-bottom: 1px solid gray; border-top: 1px solid gray; ',
+
         inline(uiOutput(ns('plus_umatrix'))),
         inline(uiOutput(ns('plus_property')))
-
     )
-
   })
+
+
   output$plus_umatrix <- renderUI({
     if(is.null(somplot_args$plus_umatrix)){somplot_args$plus_umatrix<-F}
     checkboxInput(ns("plus_umatrix"),strong("+ U-Matrix:"), value=somplot_args$plus_umatrix)
@@ -313,7 +324,7 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
   })
   savereac<-reactive({
 
-    vals$args<-argsplot()
+
 
     tosave<-isolate(reactiveValuesToList(vals))
     tosave<-tosave[-which(names(vals)%in%c("saved_data","newcolhabs",'colors_img'))]
@@ -321,6 +332,7 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
     tosave$saved_data<-vals$saved_data
     tosave$newcolhabs<-vals$newcolhabs
     tosave$colors_img<-vals$colors_img
+    tosave$args<-argsplot()
     saveRDS(tosave,"savepoint.rds")
     saveRDS(reactiveValuesToList(input),"input.rds")
     beep()
@@ -341,7 +353,7 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
   getobs_mapcode<-reactive({
     datalist<-vals$saved_data
 
-    m<-attr(data,"som")[[as.character(som_model)]]
+    m<-attr(vals$saved_data[[vals$cur_data]],"som")[[as.character(vals$som_hc)]]
     res0<-unlist(
       lapply(datalist, function (x){
         identical(colnames(x),colnames(do.call(cbind,m$data)))
@@ -393,7 +405,7 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
 
     inline(
       pickerInput(ns("pclus_points_factor"),NULL,
-                  choices = c(choices),selected=somplot_args$pclus_points_factor,width="150px")
+                  choices = c(choices),selected=vals$pclus_points_factor,width="150px")
     )
 
 
@@ -423,12 +435,12 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
   })
   output$pclus_text_palette<-renderUI({
 
-    if(is.null(somplot_args$pclus_text_palette)){somplot_args$pclus_text_palette<-"black"}
+    if(is.null(vals$pclus_text_palette)){vals$pclus_text_palette<-"black"}
     inline(
       tipify(pickerInput(inputId = ns("pclus_text_palette"),
                          label =NULL,
                          choices =  vals$colors_img$val[getsolid_col()],
-                         selected=somplot_args$pclus_text_palette,
+                         selected=vals$pclus_text_palette,
                          choicesOpt = list(
                            content =  vals$colors_img$img[getsolid_col()] ),
                          options=list(container="body"), width="75px"),
@@ -436,15 +448,23 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
       )
     )
   })
+
+  observeEvent(input$pclus_text_palette,{
+    vals$pclus_text_palette<-input$pclus_text_palette
+  })
   output$pclus_text_factor_out<-renderUI({
     req(input$pclus_text_palette)
     choices<-c(colnames(attr(data,"factors")))
     inline(
       pickerInput(ns("pclus_text_factor"),NULL,
-                  choices = c(choices),selected=somplot_args$pclus_text_factor,width="150px")
+                  choices = c(choices),selected=vals$pclus_text_factor,width="150px")
     )
 
 
+  })
+
+  observeEvent(input$pclus_text_factor,{
+    vals$pclus_text_factor<-input$pclus_text_factor
   })
   output$pclus_text_size<-renderUI({
     if(is.null(somplot_args$pclus_text_size)){somplot_args$pclus_text_size<-1}
@@ -603,33 +623,31 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
   #somplot_args<-list()
   #somplot_args$backtype="property"
   get_network<-reactive({
-    # saveRDS(reactiveValuesToList(input),'input.rds')
-    #saveRDS(reactiveValuesToList(vals),'savepoint.rds')
-    # saveRDS(reactiveValuesToList(somplot_args),'somplot_args.rds')
-    # input=readRDS('input.rds')
-    # vals= readRDS('savepoint.rds')
-    # somplot_args=readRDS('somplot_args.rds')
-    #background_type="uMatrix"
-    #beep(1)
+    backtype=NULL
+    property=NULL
     if(background_type=="hc"){
       backtype="hc"
       property=NULL
 
     } else{
-      req(length(input$plus_umatrix>0))
-      req(length(input$plus_property>0))
-      if(isFALSE(input$plus_umatrix)&isFALSE(input$plus_property)){
-        backtype=NULL
-        property=NULL
-      } else{
-        req(length(somplot_args$backtype)>0)
-        backtype=somplot_args$backtype
-        property=NULL
+      if(length(input$plus_umatrix>0)){
+        if(length(input$plus_property>0)){
+          if(isFALSE(input$plus_umatrix)&isFALSE(input$plus_property)){
+            backtype=NULL
+            property=NULL
+          } else {
+            req(length(somplot_args$backtype)>0)
+            backtype=somplot_args$backtype
+            property=NULL
 
-        if(backtype=="property"){
-          req(length(input$variable_pproperty)>0)
-          property=input$variable_pproperty}
+            if(backtype=="property"){
+              req(length(input$variable_pproperty)>0)
+              property=input$variable_pproperty}
+          }
+        }
       }
+
+
     }
 
 
@@ -718,7 +736,7 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
     somplot_args$pcodes_bgalpha<-input$pcodes_bgalpha
   })
   observeEvent(input$pclus_points_factor,{
-    somplot_args$pclus_points_factor<-input$pclus_points_factor
+    vals$pclus_points_factor<-input$pclus_points_factor
   })
   #args<-readRDS('arg.rds')
   get_error<-reactive({
@@ -749,9 +767,10 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
     errors
   })
 
-
+#data<-vals$saved_data$`nema_hellinger (1)`
   argsplot<-reactive({
-
+# input<-readRDS("input.rds")
+# vals<-readRDS("vals.rds")
     req(input$pcodes_bgalpha)
     if(isTRUE(input$pclus_addpoints)){
       req(input$pclus_points_factor)
@@ -807,7 +826,8 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
                base_size=input$base_size,
                show_neucoords=input$theme,
                newdata=input$newdata,
-               title=input$title
+               title=input$title,
+               hc=somval$hc
     )
     #saveRDS(args,"args.rds")
     #beep(3)

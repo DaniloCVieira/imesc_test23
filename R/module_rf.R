@@ -19,6 +19,7 @@ module_ui_rf <- function(id){
     -webkit-box-shadow: inset 0 1px 1px rgb(0 0 0 / 5%);
     box-shadow: inset 0 1px 1px rgb(0 0 0 / 5%)
 }"))),
+inline( actionButton(ns("teste_comb"),"SAVE")),
 uiOutput(ns("rf_panels"))
   )
 
@@ -605,40 +606,32 @@ observeEvent(input$rf_tab,{
       }
 
   })
-  pred_rf<-reactive({
-    validate(need(!anyNA(test_rf()),"NAs not allowed in the prediction Datalist"))
-    m<-vals$RF_results
-    pred_tab<- test_rf()
-    rf_pred <- predict(m$finalModel,newdata =pred_tab)
-    res<-data.frame(Predictions= rf_pred)
-    rownames(res)<-rownames(test_rf())
-    colnames(res)<-attr(vals$RF_results,"supervisor")
-    pred_rf<-res
-    # attr(res,"obs")<-test_rf()
-    res
 
 
 
+
+
+
+  observeEvent(input$teste_comb,{
+    savereac()
   })
 
 
 
 
-
-
-
-
-
-
   savereac<-reactive({
-    vals<-reactiveValuesToList(vals)
-    vals2<-vals[-c(which(names(vals)=='saved_data'))]
-    vals3<-vals2[-which(unlist(
-      lapply(vals2,function(x) object.size(x)))>=50000)]
-    vals3$saved_data<-vals$saved_data
-    saveRDS(vals3,'savepoint.rds')
-    saveRDS(reactiveValuesToList(input),'input.rds')
-    beep(10)
+    tosave<-isolate(reactiveValuesToList(vals))
+    tosave<-tosave[-which(names(vals)%in%c("saved_data","newcolhabs",'colors_img'))]
+    tosave<-tosave[-which(unlist(lapply(tosave,function(x) object.size(x)))>1000)]
+    tosave$saved_data<-vals$saved_data
+    tosave$newcolhabs<-vals$newcolhabs
+    tosave$colors_img<-vals$colors_img
+    saveRDS(tosave,"savepoint.rds")
+    saveRDS(reactiveValuesToList(input),"input.rds")
+    beep()
+    #vals<-readRDS("vals.rds")
+    #input<-readRDS('input.rds')
+
   })
 
 
@@ -1886,30 +1879,7 @@ output$saved_rfs<-renderUI({
     )
   })
 
-  rf_global_pred<-reactive({
 
-    if(vals$RF_results$modelType=="Regression"){
-      obs_reg<-RF_observed()
-
-      pred_reg<-apply(predall_rf()$individual,1,mean)
-      stat<-postResample(pred_reg,obs_reg)
-      stat
-    } else{
-      obs_class<-RF_observed()
-      pred_class<-apply(predall_rf()$individual,1, function(x){
-        res<-table(x)
-        names(res)[ which.max(res)]})
-
-      stat<-postResample(pred_class,obs_class)
-
-
-      actual<-as.numeric(as.character(pred_class)==as.character(obs_class))
-
-      auc<-  Metrics::auc(actual,pred_class)
-      c(stat,AUC=auc,use.names=T)
-    }
-
-  })
 
 
 
@@ -2122,39 +2092,7 @@ sidebarLayout(
 
 )
   })
-  output$conf_rf<-renderUI({
-    pred_rf<-pred_rf()
-    obs<-if(input$rfpred_which=="Datalist"){
-      factors<-attr(vals$saved_data[[input$obs_cm_pred]],"factors")
-      factors[,attr(vals$RF_results,"supervisor")]
-    } else{
-      attr(vals$RF_results,"sup_test")
-    }
 
-    pred_rf[,1]<-factor(pred_rf[,1],levels = levels(obs), labels=levels(obs))
-    conf<-table(obs, pred_rf[,1] )
-    res<-confusionMatrix(pred_rf[,1],obs)
-    vals$rf_test_stat_byclass<-res$byClass
-    vals$rf_test_stat_overall<-res$overall
-    vals$rf_test_cm<-as.data.frame.matrix(res$table)
-
-    #palette<-readRDS("palette.rds")
-
-    column(12,
-
-           renderPlot({
-             res<-plotCM(conf/sum(conf)*100, input$cm_suprf_palette,  newcolhabs=vals$newcolhabs, title=input$cm_test_title)
-             vals$conf_rf<-res
-             res
-           }),
-
-
-           renderPrint(
-             confusionMatrix(conf)
-
-           ))
-
-  })
   output$rf_tab3_1<-renderUI({
 
 
@@ -2238,6 +2176,113 @@ sidebarLayout(
     if(length(attr(vals$RF_results,'test'))==1){
       radioButtons(ns("rfpred_which"),"New data (X):",choices=c("Datalist"),inline=T)
     } else{ radioButtons(ns("rfpred_which"),"New data (X):",choices=c("Partition","Datalist"), inline=T, selected = vals$rfpred_which)}
+  })
+
+  rf_global_pred<-reactive({
+    if(vals$RF_results$modelType=="Regression"){
+      obs_reg<-RF_observed()
+
+      pred_reg<-apply(predall_rf()$individual,1,mean)
+      stat<-postResample(pred_reg,obs_reg)
+      stat
+    } else{
+      m<-vals$RF_results
+      obs_class<-RF_observed()
+      pred_tab=test_rf()
+      pred_class <- pred_rf()
+      stat<-postResample(pred_class,obs_class)
+      actual<-as.numeric(as.character(pred_class)==as.character(obs_class))
+      auc<-  Metrics::auc(actual,pred_class)
+      c(stat,AUC=auc,use.names=T)
+    }
+
+  })
+
+  predall_rf<-reactive({
+    validate(need(!anyNA(test_rf()),"NAs not allowed in the prediction Datalist"))
+    m<-vals$RF_results
+    #factors<-attr(vals$saved_data[[input$predrf_new]],"factors")
+    pred_tab=test_rf()
+    pred <- predict(m$finalModel,newdata = pred_tab, predict.all=T)
+    pred
+  })
+  test_rf<-reactive({
+    req(input$rfpred_which)
+    newdata<-if(input$rfpred_which=="Partition"){attr(vals$RF_results,"test")} else if(input$rfpred_which=="Datalist"){
+      req(input$predrf_new)
+      newdata<-vals$saved_data[[input$predrf_new]]
+    }
+    model_data<-newdata
+    vals$rf_newdata<-newdata
+    newdata
+
+  })
+
+  pred_rf<-reactive({
+    validate(need(!anyNA(test_rf()),"NAs not allowed in the prediction Datalist"))
+    m<-vals$RF_results
+    newdata<- test_rf()
+    rf_pred <- predict(m$finalModel,newdata =newdata)
+    res<-data.frame(Predictions= rf_pred)
+    rownames(res)<-rownames(test_rf())
+    colnames(res)<-attr(vals$RF_results,"supervisor")
+    pred_rf<-res
+    vals$rf_predtab<-res
+    # attr(res,"obs")<-test_rf()
+    res
+
+  })
+
+  RF_observed<-reactive({
+    req(input$rfpred_which)
+    if(vals$RF_results$modelType=="Regression"){
+      observed<-if(input$rfpred_which=="Datalist"){
+        req(input$predrf_newY)
+        newdata=vals$saved_data[[input$predrf_new]]
+        factors<-vals$saved_data[[input$predrf_newY]][rownames(newdata),, drop=F]
+        factors[,attr(vals$RF_results,"supervisor")]
+      } else{
+        attr(vals$RF_results,"sup_test")
+      }
+    } else{
+      observed<-if(input$rfpred_which=="Datalist"){
+        req(input$predrf_newY)
+        factors<-attr(vals$saved_data[[input$predrf_newY]],"factors")
+        newdata=vals$saved_data[[input$predrf_new]]
+        factors<-factors[rownames(newdata),, drop=F]
+        factors[,attr(vals$RF_results,"supervisor")]
+      } else{
+        attr(vals$RF_results,"sup_test")
+      }
+    }
+    observed
+
+  })
+  output$conf_rf<-renderUI({
+    pred_rf<-unlist(pred_rf())
+    obs<-unlist(RF_observed())
+    conf<-table(obs, pred_rf)
+    res<-confusionMatrix(pred_rf,obs)
+    vals$rf_test_stat_byclass<-res$byClass
+    vals$rf_test_stat_overall<-res$overall
+    vals$rf_test_cm<-as.data.frame.matrix(res$table)
+
+    #palette<-readRDS("palette.rds")
+
+    column(12,
+
+           renderPlot({
+             res<-plotCM(conf/sum(conf)*100, input$cm_suprf_palette,  newcolhabs=vals$newcolhabs, title=input$cm_test_title)
+             vals$conf_rf<-res
+             res
+           }),
+
+
+           renderPrint(
+             confusionMatrix(conf)
+
+           ))
+
   })
 
   output$rf_sidemulti<-renderUI({
@@ -2788,50 +2833,7 @@ sidebarLayout(
       })
     )
   })
-  predall_rf<-reactive({
-    validate(need(!anyNA(test_rf()),"NAs not allowed in the prediction Datalist"))
-    m<-vals$RF_results
-    #factors<-attr(vals$saved_data[[input$predrf_new]],"factors")
-    pred_tab=test_rf()
-    pred <- predict(m$finalModel,newdata = pred_tab, predict.all=T)
-    pred
-  })
-  test_rf<-reactive({
-    req(input$rfpred_which)
-    pred_tab<-if(input$rfpred_which=="Partition"){attr(vals$RF_results,"test")} else if(input$rfpred_which=="Datalist"){
-      req(input$predrf_new)
-      pred_tab<-vals$saved_data[[input$predrf_new]]
-    }
-    model_data<-pred_tab
-    pred_tab
 
-  })
-
-  RF_observed<-reactive({
-    req(input$rfpred_which)
-    if(vals$RF_results$modelType=="Regression"){
-      observed<-if(input$rfpred_which=="Datalist"){
-        req(input$predrf_newY)
-        newdata=vals$saved_data[[input$predrf_new]]
-        factors<-vals$saved_data[[input$predrf_newY]][rownames(newdata),, drop=F]
-        factors[,attr(vals$RF_results,"supervisor")]
-      } else{
-        attr(vals$RF_results,"sup_test")
-      }
-    } else{
-      observed<-if(input$rfpred_which=="Datalist"){
-        req(input$predrf_newY)
-        factors<-attr(vals$saved_data[[input$predrf_newY]],"factors")
-        newdata=vals$saved_data[[input$predrf_new]]
-        factors<-vals$saved_data[[input$predrf_newY]][rownames(newdata),, drop=F]
-        factors[,attr(vals$RF_results,"supervisor")]
-      } else{
-        attr(vals$RF_results,"sup_test")
-      }
-    }
-    observed
-
-  })
   RF_observed2<-reactive({
     req(input$rfpred_which)
 
@@ -3312,14 +3314,6 @@ output$summ_trees<-renderPlot({
   })
 
 
-  predall_rf<-reactive({
-    validate(need(!anyNA(test_rf()),"NAs not allowed in the prediction Datalist"))
-    m<-vals$RF_results
-    #factors<-attr(vals$saved_data[[input$predrf_new]],"factors")
-    pred_tab=test_rf()
-    pred <- predict(m$finalModel,newdata = pred_tab, predict.all=T)
-    pred
-  })
 
   getgrad_col<-reactive({
     res<-lapply(vals$newcolhabs, function(x) x(2))
@@ -3610,18 +3604,26 @@ req(input$interframe_palette)
 
   })
   datalistrf_predicions<-reactive({
-    temp<-data.frame(vals$rftab_pred)
+
+
+    temp_f<-temp<-data.frame(vals$rftab_pred)
+    colnames(temp_f)<-colnames(temp)<-paste0("pred_",colnames(temp))
     temp[,1]<-as.numeric( temp[,1])
-    attr(temp,"factors")<-temp
+    temp_f[,1]<-factor( temp[,1])
 
     datao<-if(vals$rfpred_which=="Datalist"){
-      vals$saved_data[[vals$predrf_new]]
+      vals$saved_data[[input$predrf_new]]
     } else{ vals$saved_data[[input$data_rfX]]}
+    faco<-attr(datao,'factors')[rownames(temp),]
+    temp_f<-cbind(faco,temp_f)
+    attr(temp,"factors")<-temp_f
+    attr(temp,"coords")<-attr(datao,"coords")[rownames(datao),]
+    attr(temp,"base_shape")<-attr(datao,"base_shape")
+    attr(temp,"layer_shape")<-attr(datao,"layer_shape")
+    attr(temp,"extra_shape")<-attr(datao,"extra_shape")
     if(input$hand_save=="create") {
-      temp<-data_migrate(datao,temp,input$newdatalist)
-      vals$saved_data[[input$newdatalist]]<-temp
+  vals$saved_data[[input$newdatalist]]<-temp
     } else{
-      temp<-data_migrate(datao,temp,input$over_datalist)
       vals$saved_data[[input$over_datalist]]<-temp
     }
 

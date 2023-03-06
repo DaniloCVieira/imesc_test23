@@ -105,7 +105,7 @@ req(cur_data)
       dim(data)
       if(length(seltree)>0){
         if(any(seltree %in% rownames(data))){
-          data<-data[   seltree,]}}
+          data<-data[   seltree,,drop=F]}}
       dim(data)
     })
     data0<-data
@@ -171,8 +171,8 @@ req(cur_data)
     }
     if(isTRUE(obs_match)){
       req(length(obs_match_datalist)>0)
-      data<-data[rownames(saved_data[[obs_match_datalist]]),]
-      data<-data[na.omit(rownames(data)),]
+      data<-data[rownames(saved_data[[obs_match_datalist]]),,drop=F]
+      data<-data[na.omit(rownames(data)),,drop=F]
 
     }
 
@@ -180,7 +180,7 @@ req(cur_data)
 
     remove_IDs<-which(rowSums(is.na(data))==ncol(data))
     if(length(remove_IDs)>0){
-      data<-data[-remove_IDs,]}
+      data<-data[-remove_IDs,,drop=F]}
     data<-data_migrate(saved_data[[cur_data]],data,cur_data)
     nrow_o<-attr(data,'nobs_ori')
     nrow_g<-nrow(data)
@@ -230,7 +230,7 @@ try({
     attr(data, "nobs_ori") <-nrow_o
     attr(data, "nvar_ori") <-ncol_o
 
-    #if(nrow(attr(data, "transf"))==2){attr(data, "transf")<-attr(data, "transf")[-1,]}
+    #if(nrow(attr(data, "transf"))==2){attr(data, "transf")<-attr(data, "transf")[-1,,drop=F]}
     attr(data,"factors")<-attr(data,"factors")[rownames(data),,drop=F]
     attr(data,"coords")<-attr(data,"coords")[rownames(data),,drop=F]
 

@@ -311,11 +311,17 @@ plotshape<-function(shape){
 }
 
 #' @export
-map_discrete_variable<-function(data,get,coords,base_shape=NULL,layer_shape=NULL,main="",size=.14,cex.main=15,cex.axes=13,cex.lab=15,cex.sub=14,cex.leg=11,cex.pt=7,subtitle="",leg="", factors=NULL,showcoords=F, cex.coords=NULL, col.coords="firebrick",col.palette='turbo',col.fac="firebrick",symbol=15, scalesize_size=T,scalesize_color=T, points=T, cex.fac=4, as_factor=F,bmu=F,key.height=1, colored_by_factor=NULL,showguides=F, limits=NULL,layer_col="gray",lighten=0.5,base_col="white",base_lighten=1,newcolhabs, extralayers=NULL,  data_depth=if(!is.null(extralayers)){3+(length(extralayers$layers)*2)} else{NULL},breaks_len=5,mybreaks=NULL,cexmin.pt=0,layer_shape_border="Grey",base_shape_border="gray", keyscale=12,  width_hint=0.15,cex_scabar=0.7
+#args<-readRDS("args.rds")
+#vals<-readRDS("savepoint.rds")
+#args$pie<-T
+#args$facpizza<-attr(vals$saved_data$`nema_hellinger (1)`,"factors")$HC6_euc
+
+map_discrete_variable<-function(data,get,coords,base_shape=NULL,layer_shape=NULL,main="",size=.14,cex.main=15,cex.axes=13,cex.lab=15,cex.sub=14,cex.leg=11,cex.pt=7,subtitle="",leg="", factors=NULL,showcoords=F, cex.coords=NULL, col.coords="firebrick",col.palette='turbo',col.fac="firebrick",symbol=15, scalesize_size=T,scalesize_color=T, points=T, cex.fac=4, as_factor=F,bmu=F,key.height=1, colored_by_factor=NULL,showguides=F, limits=NULL,layer_col="gray",lighten=0.5,base_col="white",base_lighten=1,newcolhabs, extralayers=NULL,  data_depth=if(!is.null(extralayers)){3+(length(extralayers$layers)*2)} else{NULL},breaks_len=5,mybreaks=NULL,cexmin.pt=0,layer_shape_border="Grey",base_shape_border="gray", keyscale=12,  width_hint=0.15,cex_scabar=0.7, pie=F,facpizza=NULL
                                ){
 
+
+
   {
-    {
     base_shape0<-base_shape
     layer_shape0<-layer_shape
     shapes<-get_shapes(base_shape,layer_shape,coords)
@@ -396,6 +402,7 @@ map_discrete_variable<-function(data,get,coords,base_shape=NULL,layer_shape=NULL
         }
       }
     }
+
     if(!is.null(colored_by_factor)){
       colfactor<-colored_by_factor[,1]
       names(colfactor)<-rownames(data[get])
@@ -406,55 +413,114 @@ map_discrete_variable<-function(data,get,coords,base_shape=NULL,layer_shape=NULL
       geopoint_fac<-cbind(geopoint,fac=prev_fac[rownames(geopoint)])
       col_pts<-col_pts[rownames(geopoint_fac)]
     } else {col_pts=getcolhabs(newcolhabs,col.palette,100)[2]}
-    }
 
-    if(!is.null(points)) {
-      if(isTRUE(scalesize_size)){
-        if(isTRUE(scalesize_color))
-        {  p <-  p+ geom_point( data=geopoint, aes(x=x, y=y, size=pop, col=pop), pch=symbol)
-        if(!any(geopoint$pop<0)){
-          p<-p+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
-        }
+  }
+  p0<-p
+  if(!is.null(points)) {
 
-        } else if(isFALSE(scalesize_color)&is.null(colored_by_factor))
-        {   p <- p+geom_point( data=geopoint, aes(x=x, y=y, size=pop), pch=symbol,color=col_pts)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),breaks=mybreaks, limits =range(mybreaks))} else if(isFALSE(scalesize_color)&!is.null(colored_by_factor)){
-          p <- p+geom_point( data=geopoint_fac, aes(x=x, y=y, size=pop, col=fac), pch=symbol)+ scale_color_manual(name=leg,labels =  colorFAC$prev_fac,values =  colorFAC$col_pts,drop=F )+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),breaks=mybreaks, limits =range(mybreaks))
-        }
 
-      } else  if(isFALSE(scalesize_size))
-      {
+    if(isTRUE(scalesize_size)){
+      if(isTRUE(scalesize_color))
+      {  p <-  p+ geom_point( data=geopoint, aes(x=x, y=y, size=pop, col=pop), pch=symbol)
+      if(!any(geopoint$pop<0)){
+        p<-p+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
+      }
 
-        if(isTRUE(scalesize_color)){
-          p<-  p+ geom_point( data=geopoint, aes(x=x, y=y,  col=pop), pch=symbol,size=cex.pt)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))} else if(isFALSE((scalesize_color))){
-            if(!is.null(colored_by_factor)) {
+      } else if(isFALSE(scalesize_color)&is.null(colored_by_factor))
+      {   p <- p+geom_point( data=geopoint, aes(x=x, y=y, size=pop), pch=symbol,color=col_pts)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),breaks=mybreaks, limits =range(mybreaks))} else if(isFALSE(scalesize_color)&!is.null(colored_by_factor)){
+        p <- p+geom_point( data=geopoint_fac, aes(x=x, y=y, size=pop, col=fac), pch=symbol)+ scale_color_manual(name=leg,labels =  colorFAC$prev_fac,values =  colorFAC$col_pts,drop=F )+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),breaks=mybreaks, limits =range(mybreaks))
+      }
+
+    } else  if(isFALSE(scalesize_size))
+    {
+
+      if(isTRUE(scalesize_color)){
+        p<-  p+ geom_point( data=geopoint, aes(x=x, y=y,  col=pop), pch=symbol,size=cex.pt)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))} else if(isFALSE((scalesize_color))){
+          if(!is.null(colored_by_factor)) {
+            if(isTRUE(pie)){
+              req(length(facpizza)>0)
+              #vals<-readRDS("savepoint.rds")
+              # facpizza<-attr(vals$saved_data$`nema_hellinger (1)`,"factors")[rownames(geopoint),'estacao']
+              geopoint$fac<-facpizza
+              require("scatterpie")
+              li<-split(geopoint,geopoint$fac)
+              x<-li[[1]]
+              newdf<-data.frame(do.call(rbind,lapply(li,function(x){
+                c(x=mean(x$x),y=mean(x$y),group=NA,table(x$pop))
+              }))
+              )
+              newdf$group<-1:nrow(newdf)
+              colnames(newdf)[4:ncol(newdf)]<-levels(geopoint$pop)
+              newdf<-na.omit(newdf)
+
+
+              p1<-p0+ geom_scatterpie(aes(x=x, y=y, group=group), data=newdf,
+                                      cols=colnames(newdf)[4:ncol(newdf)],
+                                      color=NA,
+                                      alpha=.8)
+
+              p<-p1+ scale_fill_manual(name=leg,labels =  colorFAC$prev_fac,values =  colorFAC$col_pts,drop=F)
+            } else{
               p <- p+geom_point( data=geopoint_fac, aes(x=x, y=y, col=fac), pch=symbol,size=cex.pt)+ scale_color_manual(name=leg,labels =  colorFAC$prev_fac,values =  colorFAC$col_pts,drop=F)+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
-            } else {
+            }} else {
               p<-   p+geom_point( data=geopoint, aes(x=x, y=y), pch=symbol,size=cex.pt, color=col_pts[rownames(geopoint)])+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
             }
-          }
-      }
-    }
-    names( p$layers)[length( p$layers)]<-paste0('points')
-
-    #scale_color_viridis(name=name.var, limits= range(mybreaks)) +
-    if(is.null(colored_by_factor)){
-      if(isTRUE(as_factor)){p<- p +   geom_point( data=geopoint, aes(x=x, y=y), pch=symbol, color=colhabs[as.factor(prev)]) }else{
-        if(!any(geopoint$pop<0)){
-          p<-p+
-            scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
-        } else{
-          p<-p+
-            scale_radius(name=name.var,guide="none",breaks=mybreaks, limits =range(mybreaks))
         }
-         p<-p+
+    }
+p
+if(is.numeric(geopoint$pop)){
+  if(isFALSE(scalesize_size)&isTRUE(pie)){
+    req(length(facpizza)>0)
+    #vals<-readRDS("savepoint.rds")
+    # facpizza<-attr(vals$saved_data$`nema_hellinger (1)`,"factors")[rownames(geopoint),'estacao']
+    geopoint$fac<-facpizza
+    require("scatterpie")
+    li<-split(geopoint,geopoint$fac)
+    x<-li[[7]]
+    lis<-lapply(li,function(x){
+      xx<-x$pop/length(x$pop)
+
+      c(x=mean(x$x),y=mean(x$y),group=NA,xx)
+    })
+    #max(unlist(lapply(lis,length)))
+
+    newdf<-data.frame(do.call(rbind,lis))
+    newdf$group<-1:nrow(newdf)
+    colnames(newdf)[4:ncol(newdf)]<-paste0("obs",1:length(4:ncol(newdf)))
+    #newdf[is.na(newdf)]<-0
+
+
+    p1<-p0+ geom_scatterpie(aes(x=x, y=y, group=group), data=newdf,
+                            cols=colnames(newdf)[4:ncol(newdf)],
+                            color=NA,
+                            alpha=.8)
+
+    p<-p1+ scale_fill_manual(name=leg,values =  newcolhabs[[col.palette]](length(4:ncol(newdf))),drop=F)
+  }
+}
+
+  }
+  names( p$layers)[length( p$layers)]<-paste0('points')
+
+  #scale_color_viridis(name=name.var, limits= range(mybreaks)) +
+  if(is.null(colored_by_factor)){
+    if(isTRUE(as_factor)){p<- p +   geom_point( data=geopoint, aes(x=x, y=y), pch=symbol, color=colhabs[as.factor(prev)]) }else{
+      if(!any(geopoint$pop<0)){
+        p<-p+
+          scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
+      } else{
+        p<-p+
+          scale_radius(name=name.var,guide="none",breaks=mybreaks, limits =range(mybreaks))
+      }
+      p<-p+
 
         scale_colour_gradientn (colours=getcolhabs(newcolhabs,col.palette,100), guide="none")+
 
         guides(size = guide_legend(override.aes = list(colour = as.list( scales::col_numeric(getcolhabs(newcolhabs,col.palette,100), domain = NULL)(mybreaks)),size=scales::rescale(mybreaks,c(1,cex.pt)))))
 
-      }
     }
   }
+
   p
 
   #p<-p  +  scale_size(name=name.var, range=c(0,cex.pt), breaks=mybreaks)

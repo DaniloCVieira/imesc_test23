@@ -118,6 +118,7 @@ knn_icon2 <- base64enc::dataURI(file = "inst/app/www/knn_icon2.png", mime = "ima
 
 comp_icon <- base64enc::dataURI(file = "inst/app/www/comp_icon.png", mime = "image/png")
 comp_icon2 <- base64enc::dataURI(file = "inst/app/www/comp_icon2.png", mime = "image/png")
+sim_icon <- base64enc::dataURI(file = "inst/app/www/sim_icon.png", mime = "image/png")
 
 
 

@@ -2190,7 +2190,9 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
 
                column(12,
                       '+ Size:',inline(uiOutput("map_pt_range"))),
-               uiOutput("map_scalepoints")
+               uiOutput("map_scalepoints"),
+
+               uiOutput("map_pizza")
 
            )
     )
@@ -2213,6 +2215,30 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
              uiOutput("mapfac",inline=T))
     )
   })
+
+
+  output$map_pizza<-renderUI({
+    if(is.null(vals$pizza_map)){
+      vals$pizza_map<-F
+    }
+    column(12,"+",checkboxInput("pizza_map","Pizza", vals$pizza_map, width="100px"),
+           uiOutput("pizza_fac",inline=T))
+  })
+
+  observeEvent(input$pizza_map,{
+    vals$pizza_map<-input$pizza_map
+  })
+
+  output$pizza_fac<-renderUI({
+    req(isTRUE(input$pizza_map))
+    factors<-attr(vals$saved_data[[input$data_map]],"factors")
+    choices<-colnames(factors)
+    pickerInput("pizza_fac",NULL, choices=choices,options=list(container="body"), width="200px")
+  })
+  observeEvent(input$pizza_fac,{
+    vals$pizza_fac<-input$pizza_fac
+  })
+
 
   output$map_pt_range<-renderUI({
     if(input$choices_map=="Numeric-Attribute"){
@@ -5017,7 +5043,7 @@ output$del_datalist_choices<-renderUser({
       if(input$import_to_attr=="Numeric-Attribute"){
         new<-df_to
         str(new)
-        newv<-as.list(newvars[rownames(df_to),])
+        newv<-as.list(newvars[rownames(df_to),, drop=F])
         names(newv)<-do.call(c,lapply(paste("newbin",names(newv),sep="_"), function (x) input[[x]]))
         new[names(newv)]<-newv
 
@@ -5061,7 +5087,7 @@ output$del_datalist_choices<-renderUser({
             colnames(newv)<-do.call(c,lapply(paste("newbin",colnames(newv),sep="_"), function (x) input[[x]]))
             newvars<-newv
             new<-df_to
-            new[,colnames(newv)]<-newv[rownames(df_to),]
+            new[,colnames(newv)]<-newv[rownames(df_to),,drop=F]
 
 
 
@@ -5347,7 +5373,7 @@ output$del_datalist_choices<-renderUser({
     }
     if(input$import_from_attr=="Numeric-Attribute"){
       req(input$import_to_attr=="Numeric-Attribute")
-      cols<-colnames(data[,input$importvar,drop=F])[]
+      cols<-colnames(data[,input$importvar,drop=F])
     }
 
     lbin<-lapply(cols,function(x){
@@ -6860,7 +6886,7 @@ output$del_datalist_choices<-renderUser({
     gosave$df
   })
   savecodebook<-reactive({
-
+   req(input$hand_save)
     data<-getdata_hc()
     m<-getmodel_hc()
     codes<-data.frame(do.call(cbind,m$codes))
@@ -6882,10 +6908,12 @@ output$del_datalist_choices<-renderUser({
     attr(temp,"transf")<-NULL
     attr(temp,"nobs_ori")<-NULL
     if(input$hand_save=="create"){
+      req(input$codebook_newname)
 
       vals$saved_data[[input$codebook_newname]]<-temp
       #  vals$cur_data<-input$data_newname
     } else{
+      req(input$codebook_over)
 
       vals$saved_data[[input$codebook_over]]<-temp
       # vals$cur_data<-input$data_over
@@ -7097,7 +7125,7 @@ output$del_datalist_choices<-renderUser({
 
     newdata<-data_migrate(to_merge[[mx]],newdata,input$mergec_newname)
     attr(newdata, "transf")=NULL
-    attr(newdata,"factors")<-newfac[rownames(newdata),]
+    attr(newdata,"factors")<-newfac[rownames(newdata),, drop=F]
     newdata
   })
   mergedatacol<-reactive({
@@ -7164,8 +7192,8 @@ output$del_datalist_choices<-renderUser({
     }else{
       1:nrow(datarow_df)
     }
-    datarow_df<-datarow_df[pic,]
-    attr(datarow_df,"factors")<-factors_df[pic,]
+    datarow_df<-datarow_df[pic,,drop=F]
+    attr(datarow_df,"factors")<-factors_df[pic,,drop=F]
     attr(datarow_df,"coords")<-coords_df[pic,]
     attr(datarow_df,"base_shape")<-base_shape[[1]]
     attr(datarow_df,"layer_shape")<-layer_shape[[1]]
@@ -8189,7 +8217,7 @@ output$del_datalist_choices<-renderUser({
                   attr(vals$saved_data[[input$shp_datalist]],"extra_shape")[[input$extra_layer_newname]]<-shape
                 }
     )
-    removeModal()
+   # removeModal()
     res
 
   })
@@ -8208,8 +8236,13 @@ output$del_datalist_choices<-renderUser({
   })
   output$shp_datalist<-renderUI({
     req(length(vals$saved_data)>0)
-    pickerInput("shp_datalist","5. Select the Datalist:",choices=names(vals$saved_data), width="200px")
+    pickerInput("shp_datalist","5. Select the Datalist:",choices=names(vals$saved_data), width="200px", selected=vals$shp_datalist)
   })
+
+  observeEvent(input$shp_datalist,{
+    vals$shp_datalist<-input$shp_datalist
+  })
+
   observeEvent(input$close_shp,{
 
     removeModal()
@@ -8459,7 +8492,7 @@ output$del_datalist_choices<-renderUser({
 
     remove_IDs<-which(rowSums(is.na(data))==ncol(data))
     if(length(remove_IDs)>0){
-      data<-data[-remove_IDs,]}
+      data<-data[-remove_IDs,,drop=F]}
 
 
     data
@@ -8702,10 +8735,15 @@ output$del_datalist_choices<-renderUser({
         mybreaks<-NULL
       }
 
+    pizza_fac<-NULL
+    if(isTRUE(input$pizza_map)){
+      factors<-attr(vals$saved_data[[input$data_map]],"factors")
+      pizza_fac<-factors[filtermap(),input$pizza_fac]
+    }
 
+    args<-
+      list(
 
-    m<-
-      map_discrete_variable(
         data = data_go,
         coords = coords[rownames(data_go),],
         base_shape = if(isTRUE(input$map_1a_base)){
@@ -8732,7 +8770,7 @@ output$del_datalist_choices<-renderUser({
         symbol=as.numeric(input$pt_symbol),
         scalesize_size= scalesize_size(),
         scalesize_color=scalesize_color(),
-        points=T, input$pt_factor+6,
+        points=T,
         as_factor=F,
         bmu=F,
         colored_by_factor=  colored_by_factor,
@@ -8751,12 +8789,19 @@ output$del_datalist_choices<-renderUser({
         breaks_len=input$breaks_len,
         mybreaks=mybreaks,
         key.height=input$key.height,
-       keyscale=input$keyscale,  width_hint=input$scabarsize,cex_scabar=input$scabartextsize,
+        keyscale=input$keyscale,
+        width_hint=input$scabarsize,
+        cex_scabar=input$scabartextsize,
         layer_shape_border=getcolhabs(vals$newcolhabs,input$layer_col_border,1),
         base_shape_border= getcolhabs(vals$newcolhabs,input$base_col_border,1),
-        cex.main=input$pt_titlemap
+        cex.main=input$pt_titlemap,
+        pie=input$pizza_map,
+        facpizza=pizza_fac
+
       )
 
+
+    m<-do.call(map_discrete_variable,args)
     attr(m,"args")<-l1()
     vals$map_res<-m
 
@@ -8797,59 +8842,83 @@ output$del_datalist_choices<-renderUser({
     extralayers
   })
   map_fac_disc<-reactive({
+
     get<-vals$vars_fac[which(vals$vars_fac==input$var_map)]
     col=input$pt_palette
     data <- attr(getdata_map(),"factors")[filtermap(),,drop=F]
     coords<-attr(getdata_map(),"coords")[rownames(data),]
     req(get%in%colnames(data))
+    pizza_fac<-NULL
+    if(isTRUE(input$pizza_map)){
+      factors<-attr(vals$saved_data[[input$data_map]],"factors")
+      pizza_fac<-factors[filtermap(),input$pizza_fac]
+    }
+
+    args<-list(
+
+      data = data,
+      coords = coords,
+      base_shape =if(isTRUE(input$map_1a_base)){attr(getdata_map(),"base_shape") } else { NULL},
+      layer_shape =if(isTRUE(input$map_1f_layer)){attr(getdata_map(),"layer_shape") } else { NULL},
+      get = get,
+      main = input$map_title,
+      factors=labcoords(),
+      showcoords=input$showcoords,
+      cex.pt = input$pt_points+6,
+      cexmin.pt=input$pt_points_min,
+      cex.coords=input$pt_coords+1,
+      cex.fac=input$pt_factor+2,
+      col.fac=input$col_factor,
+      cex.axes=input$pt_legend,
+      cex.lab=input$pt_legend,
+      cex.leg=input$cex.key,
+      leg=input$map_legend,
+      col.coords=if(length(input$col_coords)>0){   getcolhabs(vals$newcolhabs,input$col_coords,5)[1] } else{ NULL},
+      col.palette=col,
+      symbol=as.numeric(input$pt_symbol),
+      scalesize_size= F,
+      scalesize_color=F,
+      points=T,
+
+      as_factor=F,
+      bmu=F,
+      colored_by_factor=attr(getdata_map(),"factors")[as.character(input$var_map)][filtermap(),, drop=F],
+      showguides=input$showguides,
+      limits=as.matrix( cbind(
+        c(input$long_xmin,  input$lat_xmin),
+        c(input$long_xmax,  input$lat_xmax)
+      )),
+      layer_col=getcolhabs(vals$newcolhabs,input$layer_col,1),
+      lighten=input$layer_lighten,
+      base_col=getcolhabs(vals$newcolhabs,input$base_col,1),
+      base_lighten=input$base_lighten,
+      newcolhabs=vals$newcolhabs,
+      extralayers=extralayers(),
+      data_depth=input$data_depth,
+      layer_shape_border=getcolhabs(vals$newcolhabs,input$layer_col_border,1),
+      base_shape_border= getcolhabs(vals$newcolhabs,input$base_col_border,1),
+      cex.main=input$pt_titlemap,
+      key.height=input$key.height,
+      keyscale=input$keyscale,  width_hint=input$scabarsize,cex_scabar=input$scabartextsize,
+      pie=input$pizza_map,
+      facpizza=pizza_fac
+
+    )
+
+    #args<-readRDS('args.rds')
+#attach(args)
+   # saveRDS(args,"args.rds")
+    #beep()
+
+    #args<-readRDS('args.rds')
+
 
     m<-suppressWarnings(
-      map_discrete_variable(
-        data = data,
-        coords = coords,
-        base_shape =if(isTRUE(input$map_1a_base)){attr(getdata_map(),"base_shape") } else { NULL},
-        layer_shape =if(isTRUE(input$map_1f_layer)){attr(getdata_map(),"layer_shape") } else { NULL},
-        get = get,
-        main = input$map_title,
-        factors=labcoords(),
-        showcoords=input$showcoords,
-        cex.pt = input$pt_points+6,
-        cexmin.pt=input$pt_points_min,
-        cex.coords=input$pt_coords+1,
-        cex.fac=input$pt_factor+2,
-        col.fac=input$col_factor,
-        cex.axes=input$pt_legend,
-        cex.lab=input$pt_legend,
-        cex.leg=input$cex.key,
-        leg=input$map_legend,
-        col.coords=if(length(input$col_coords)>0){   getcolhabs(vals$newcolhabs,input$col_coords,5)[1] } else{ NULL},
-        col.palette=col,
-        symbol=as.numeric(input$pt_symbol),
-        scalesize_size= F,
-        scalesize_color=F,
-        points=T, input$pt_factor+6,
-        as_factor=F,
-        bmu=F,
-        colored_by_factor=attr(getdata_map(),"factors")[as.character(input$var_map)][filtermap(),, drop=F],
-        showguides=input$showguides,
-        limits=as.matrix( cbind(
-          c(input$long_xmin,  input$lat_xmin),
-          c(input$long_xmax,  input$lat_xmax)
-        )),
-        layer_col=getcolhabs(vals$newcolhabs,input$layer_col,1),
-        lighten=input$layer_lighten,
-        base_col=getcolhabs(vals$newcolhabs,input$base_col,1),
-        base_lighten=input$base_lighten,
-        newcolhabs=vals$newcolhabs,
-        extralayers=extralayers(),
-        data_depth=input$data_depth,
-        layer_shape_border=getcolhabs(vals$newcolhabs,input$layer_col_border,1),
-        base_shape_border= getcolhabs(vals$newcolhabs,input$base_col_border,1),
-        cex.main=input$pt_titlemap,
-        key.height=input$key.height,
-       keyscale=input$keyscale,  width_hint=input$scabarsize,cex_scabar=input$scabartextsize
-      )
+      do.call(map_discrete_variable,args)
+
     )
+
+
 
     attr(m,"args")<-l1()
     vals$map_res<-m
@@ -10121,43 +10190,73 @@ output$del_datalist_choices<-renderUser({
                     width="100px"))
   })
   output$hc_side4<-renderUI({
+    req(input$data_hc%in%names(vals$saved_data))
     res<-module_ui_somplot("hc_tab4")
-    res
+
+    div(
+      res,
+      div(actionLink('create_codebook',"+ Create Datalist with the Codebook and HC class"))
+    )
   })
   output$hc_tab4_out<-renderUI({
-    somC<-phc()
+    req(input$data_hc%in%names(vals$saved_data))
+    #
     callModule(module_server_somplot,
                "hc_tab4",
                vals=vals,
                data_target=input$data_hc,
                som_model=input$som_hc,
-               background_type="hc",
+               background_type="None",
                property=NULL,
-               hc=somC$som.hc,
-               df_symbol=df_symbol
+               hc=NULL,
+               df_symbol=df_symbol,
+               col_grad=T
     )
 
+    uiOutput("BMU_PLOT")
+  })
+
+  output$BMU_PLOT<-renderUI({
     renderPlot({
 
-
+      somC<-phc()
       args<-vals[[ns_tab4("somplot_args")]]
-      req(length(args)>0)
-      vals$hc_tab4_plot<-do.call(bmu_plot,args)
-      vals$hc_tab4_plot
+      #args<-readRDS("args.rds")
+      #somC<-readRDS("somC.rds")
+
+     # args<-saveRDS(args,"args.rds")
+     # somC<-saveRDS(somC,"somC.rds")
+      p<-do.call(bmu_plot,args)
+      m<-args$m
+
+      newhc<-get_neurons_hc(m,background_type="hc",property=NULL,hc=somC$som.hc)
+
+      he<-do.call(rbind,args$hexs)
+      he$group<-factor(newhc)
+      bg_color<-args$newcolhabs[[args$bg_palette]](nlevels(newhc))
+      bg_color<-lighten(bg_color,args$bgalpha)
 
 
+      p2<-p+new_scale_fill()+geom_polygon(data=he, mapping=aes(x=x, y=y, group=neu, fill=group), col=args$border)+scale_fill_manual(name="",values=bg_color,labels=levels(newhc))
+      p2$layers[[1]]<-NULL
+      n<-length(p2$layers)
+      p2$layers<-p2$layers[c(n,c(1:n)[-n])]
+      p<-p2
+
+
+      vals$hc_tab4_plot<-p
+
+      p
     })
   })
 
   output$hc_side5<-renderUI({
-    somC<-phc()
     res<-module_ui_somplot("hc_tab5")
     res
 
   })
   output$hc_tab5_out<-renderUI({
     #req(input$hc_tab=='hc_tab5')
-    somC<-phc()
     callModule(module_server_somplot,
                "hc_tab5",
                vals=vals,
@@ -10166,7 +10265,7 @@ output$del_datalist_choices<-renderUser({
                background_type="hc",
                property=NULL,
                map_newdata=T,
-               hc=somC$som.hc,
+               hc=NULL,
                df_symbol=df_symbol
     )
     renderPlot({
@@ -12812,6 +12911,8 @@ req(input$model_or_data=='som codebook')
                                 uiOutput('menu_sgboost_out')),
                         tabItem(tabName = "menu_comp",
                                 uiOutput('menu_comp_out')),
+                        tabItem(tabName = "menu_sim",
+                                uiOutput('menu_sim_out')),
                         tabItem(tabName = "menu_kmeans",
                                 uiOutput('menu_kmeans_out')),
                         tabItem(  tabName = "menu_maps",
@@ -12832,6 +12933,453 @@ req(input$model_or_data=='som codebook')
 
     )
   })
+
+
+  ##Simulate
+  output$menu_sim_out<-renderUI({
+
+
+    sidebarLayout(
+      sidebarPanel(width = 3,
+div(class="map_control_style",
+
+  uiOutput("data_sim"),
+  uiOutput("model_sim"),
+  actionButton("sim_run","RUN"),
+  splitLayout(
+
+    actionButton("sel_all_M","sel_all_M"),
+    actionButton("unsel_all_M","unsel_all_M"),
+    actionButton("sel_all_R","sel_all_R"),
+    actionButton("unsel_all_R","unsel_all_R"),
+  ),
+  #div(DT::dataTableOutput("sim_vars2")),
+  div(
+    style="height:800px;overflow-y: scroll",uiOutput("sim_vars")
+  ),
+
+  actionButton("sim_reset","Reset"),
+  #uiOutput("sim_results0"),
+  uiOutput("sim_results")
+
+
+
+
+
+
+)),
+      mainPanel(
+        uiOutput('sim_mapvar'),
+        uiOutput("sim_latlong"),
+
+
+      )
+    )
+  })
+
+  output$sim_latlong<-renderUI({
+    req(input$data_sim)
+    data<-vals$saved_data[[input$data_sim]]
+    coords<-attr(data,"coords")
+    longco<-c(range(coords$LONG),sort(c(max(coords$LONG),mean(coords$LONG))))
+    latco<-c(range(coords$LAT),sort(c(max(coords$LAT),mean(coords$LAT))))
+
+    column(12,
+           column(10,noUiSliderInput("long","Long",min=longco[1],max= longco[2],c(longco[3] ,longco[4]), width="100%"),offset = 2),
+           column(2,noUiSliderInput("lat","Lat",min=latco[1],max= latco[2],c(latco[3] ,latco[4]),orientation = "vertical",height ="400px",direction="rtl")),
+           column(10,uiOutput("map_pic")))
+  })
+  vals_sim<-reactiveValues()
+  output$data_sim<-renderUI({
+    rfs<-lapply(vals$saved_data,function(x) attr(x,"rf"))
+    choices=names(which(!unlist(lapply(rfs,is.null))))
+
+    pickerInput("data_sim","Data",choices, selected=vals$cur_data_sim)
+  })
+
+  observeEvent(input$data_sim,{
+    vals$cur_data_sim<-input$data_sim
+  })
+  getsim_params<-reactive({
+    req(input$data_sim)
+    data<-vals$saved_data[[input$data_sim]]
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    imp<-varImp(m)
+    variables<-names(sort(apply(imp$importance,1,mean),decreasing=T))
+
+
+    res0<-data.frame(vars=variables)
+    res0$sim_m<-unlist(lapply(variables,function(x){input[[paste0("sim_m",x)]]}))
+    res0$sim_r<-unlist(lapply(variables,function(x){input[[paste0("sim_r",x)]]}))
+    res0$sim_a<-unlist(lapply(variables,function(x){input[[paste0("sim_a",x)]]}))
+    req(length(res0$sim_m)>0)
+    req(length(res0$sim_r)>0)
+    req(length(res0$sim_a)>0)
+
+    vals_sim$sim_res0<-res0
+    res0
+
+  })
+  sim_picsample<-reactive({
+    data<-vals$saved_data[[input$data_sim]]
+    coords<-attr(data,"coords")
+    rang_x<-input$long
+    rang_y<-input$lat
+    df<-data.frame(x=between(coords[,1],rang_x[1],rang_x[2]),
+                   y=between(coords[,2],rang_y[1],rang_y[2]))
+    rownames(data)[which(rowSums(df)==2)]
+
+  })
+  output$sim_results0<-renderUI({
+    req(input$data_sim)
+
+
+    div(
+
+      renderPrint(data.frame( vals_sim$sim_res0))
+
+    )})
+  output$sim_mapvar<-renderUI({
+    req(input$data_sim)
+    req(input$data_sim%in%names(vals$saved_data))
+    data<-vals$saved_data[[input$data_sim]]
+    req(length(attr(data,"rf"))>0)
+    req(input$model_sim%in%names(attr(data,"rf")))
+
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    imp<-varImp(m)
+    variables<-names(sort(apply(imp$importance,1,mean),decreasing=T))
+    splitLayout(
+      pickerInput("sim_mapvar","Variable map",variables, options=list(container="body")),
+      uiOutput("sim_map_filter1"),
+      uiOutput("sim_map_filter2"),
+      uiOutput("sim_rfresult")
+    )
+  })
+
+  filtersim_map<-reactive({
+    data<-vals$saved_data[[input$data_sim]]
+    pic<-rownames(data)
+    if(length(input$var_sim_map_filter1)>0){
+      if(input$var_sim_map_filter1!="None"){
+        factors<-attr(data,"factors")
+        filtro <- as.character(input$var_sim_map_filter1)
+        filtro2 <- as.character(input$var_sim_map_filter2)
+        pic0 <- which(as.character(factors[, filtro]) == filtro2)
+        pic<-pic[pic0]
+      }
+    }
+    pic
+  })
+
+  output$sim_map_filter1<-renderUI({
+    req(input$data_sim)
+    data<-vals$saved_data[[input$data_sim]]
+    factors<-attr(data,"factors")
+    inline(pickerInput("var_sim_map_filter1",label = "Filter",choices = c("None",colnames(factors)), width="150px"))
+  })
+
+  output$sim_map_filter2<-renderUI({
+    req(input$var_sim_map_filter1!="None")
+    data<-vals$saved_data[[input$data_sim]]
+    factors<-attr(data,"factors")
+    fac<-factors[,input$var_sim_map_filter1]
+    inline(pickerInput("var_sim_map_filter2",label = "Level",choices = levels(fac), width="150px"))
+  })
+
+
+  output$sim_mapfilter<-renderUI({
+
+  })
+  output$sim_vars<-renderUI({
+    req(input$data_sim)
+    data<-vals$saved_data[[input$data_sim]]
+    req(length(attr(data,"rf"))>0)
+    req(input$model_sim%in%names(attr(data,"rf")))
+
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    req(length(m)>0)
+    imp<-varImp(m)
+    variables<-names(sort(apply(imp$importance,1,mean),decreasing=T))
+    lapply(variables,function(x){
+      div(
+        div(strong(x)),
+        div(
+          inline(checkboxInput(paste0("sim_m",x),'Multiply by')),
+          inline(numericInput(paste0("sim_a",x),NULL,1.1, width="75px")),
+          inline(checkboxInput(paste0("sim_r",x),'Randomize'))
+
+        ))
+    })
+  })
+
+
+  output$model_sim<-renderUI({
+    req(input$data_sim)
+    data<-vals$saved_data[[input$data_sim]]
+
+    choices<-names(attr(data,"rf"))
+    pickerInput("model_sim","model",choices)
+
+  })
+  output$sim_results<-renderUI({
+    req(input$data_sim)
+    data<-vals$saved_data[[input$data_sim]]
+    req(length(attr(data,"rf"))>0)
+    req(input$model_sim%in%names(attr(data,"rf")))
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    renderPrint(m)
+  })
+  output$sim_rfresult<-renderUI({
+    req(input$data_sim)
+    data<-vals$saved_data[[input$data_sim]]
+    req(length(attr(data,"rf"))>0)
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    newdata<-vals_sim$newdata
+    pred<-predict(m,as.matrix(newdata))
+    names(pred)<-rownames(newdata)
+    obs1<-m$trainingData[,1]
+    names(obs1)<-rownames(m$trainingData)
+    obs<-factor(c(obs1,attr(m,"sup_test")))
+    df<-data.frame(cbind(obs,pred))
+    rownames(df)<-rownames(newdata)
+
+    vals_sim$pred<-df
+    vals_sim$error<-df[,2]!=df[,1]
+    res<-postResample( factor(df[,2]),
+                       factor(df[,1]))
+    renderPrint(res)
+  })
+  output$map_pic<-renderUI({
+    req(input$data_sim)
+    data0<-data<-vals$saved_data[[input$data_sim]]
+    coords<-attr(data,"coords")
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    data<-vals_sim$newdata
+    xx<-c(input$long[1],input$long[1],input$long[2],input$long[2])
+    yy<-c(input$lat[1],input$lat[2],input$lat[2],input$lat[1])
+
+
+    var<-data[,input$sim_mapvar]
+    cex=var/max(var)*5
+    req(is.numeric(cex))
+    cutcex<-cut(cex,10)
+    cols<-vals$newcolhabs[["turbo"]](10)
+
+
+    rang_x<-input$long
+    rang_y<-input$lat
+
+    observeEvent(input$sim_tab,{
+      vals$sim_tab_cur<-input$sim_tab
+    })
+    df<-data.frame(x=between(coords[,1],rang_x[1],rang_x[2]),
+                   y=between(coords[,2],rang_y[1],rang_y[2]))
+
+    div(
+      tabsetPanel(id="sim_tab",selected=vals$sim_tab_cur,
+        tabPanel("Value",value="tab_01",
+                 renderPlot({
+                   plot(coords[rownames(data),], cex=cex, col=cols[cutcex])
+                   polygon(xx,yy)
+                   legend("topl",legend=levels(cutcex),col = cols, pch=1)
+                 },height=550, width=800)),
+        tabPanel("Accuracy",value="tab_02",
+                 renderPlot({
+                   plot(coords[rownames(data),],  col= c("blue","red")[as.factor(vals_sim$error)], pch=16)
+
+                   polygon(xx,yy)
+                   legend("topl",legend=levels(cutcex),col = cols, pch=1)
+
+
+                 },height=550, width=800)),
+
+        tabPanel("Map",value="tab_03",
+                 renderPlot({
+                   df<-vals_sim$pred[filtersim_map(),,drop=F]
+                   colnames(df)<-c("obs",'pred')
+                   df$pred<-factor(df$pred)
+                   pizza_fac<-attr(data0,"factors")[rownames(df),"EST"]
+
+
+                   map_discrete_variable(df,get="pred",coords=coords,base_shape=attr(data0,'base_shape'),layer_shape=attr(data0,"layer_shape"),points=T,colored_by_factor=df["pred"], newcolhabs = vals$newcolhabs,symbol =16 ,factors=NULL,
+                                         scalesize_size = F,
+                                         scalesize_color=F,
+                                         as_factor=F,
+                                         bmu=F,
+                                         pie=T,
+                                         facpizza=pizza_fac
+                                      )
+                   # polygon(xx,yy)
+                   # legend("topl",legend=levels(cutcex),col = cols, pch=1)
+                 },height=550, width=800),
+                 renderPrint({
+                   df<-vals_sim$pred
+                   colnames(df)<-c("obs",'pred')
+                   df
+                 })
+
+                 ),
+        tabPanel("Map2",value="tab_04",
+                 renderPlot({
+                   df<-vals_sim$pred[filtersim_map(),,drop=F]
+                   colnames(df)<-c("obs",'pred')
+                   df$pred<-factor(df$pred)
+                   re<-df$pred==df$obs
+                   re[which(re==T)]<-"Acertos"
+                   re[which(re==F)]<-"Erros"
+                   re<-data.frame(re)
+                   rownames(re)<-rownames(df)
+                   colnames(re)<-"pred"
+                   re$pred<-factor(re$pred)
+                   pizza_fac<-attr(data0,"factors")[rownames(df),"EST"]
+                   df$pred<-re$pred
+
+
+                   map_discrete_variable(df,get="pred",coords=coords,base_shape=attr(data0,'base_shape'),layer_shape=attr(data0,"layer_shape"),points=T,colored_by_factor=re["pred"], newcolhabs = vals$newcolhabs,symbol =16 ,factors=NULL,
+                                         scalesize_size = F,
+                                         scalesize_color=F,
+                                         as_factor=F,
+                                         bmu=F,
+                                         pie=T,
+                                         facpizza=pizza_fac
+                   )
+                   # polygon(xx,yy)
+                   # legend("topl",legend=levels(cutcex),col = cols, pch=1)
+                 },height=550, width=800),
+                 renderPrint({
+                   df<-vals_sim$pred
+                   colnames(df)<-c("obs",'pred')
+                   df
+                 })
+
+        )
+
+        ),
+
+      splitLayout(renderPlot(boxplot(vals$saved_data[[input$data_sim]][sim_picsample(),input$sim_mapvar])),
+                  renderPlot( boxplot(data[sim_picsample(),input$sim_mapvar]))),
+
+      renderPrint({
+        res<-sim_picsample()
+
+        vals_sim$sim_ids<-res
+        res
+      })
+
+
+    )
+  })
+  observeEvent(input$sel_all_M,{
+    data<-vals$saved_data[[input$data_sim]]
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    imp<-varImp(m)
+    variables<-names(sort(apply(imp$importance,1,mean),decreasing=T))
+    res0<-data.frame(vars=variables)
+    for(x in variables){
+      updateTextInput(session,paste0("sim_m",x), value=T)
+
+    }
+  })
+  observeEvent(input$unsel_all_M,{
+    data<-vals$saved_data[[input$data_sim]]
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    imp<-varImp(m)
+    variables<-names(sort(apply(imp$importance,1,mean),decreasing=T))
+    res0<-data.frame(vars=variables)
+    for(x in variables){
+      updateTextInput(session,paste0("sim_m",x), value=F)
+
+    }
+  })
+  observeEvent(input$sel_all_R,{
+    data<-vals$saved_data[[input$data_sim]]
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    imp<-varImp(m)
+    variables<-names(sort(apply(imp$importance,1,mean),decreasing=T))
+    res0<-data.frame(vars=variables)
+    for(x in variables){
+      updateTextInput(session,paste0("sim_r",x), value=T)
+
+    }
+  })
+  observeEvent(input$unsel_all_R,{
+    data<-vals$saved_data[[input$data_sim]]
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    imp<-varImp(m)
+    variables<-names(sort(apply(imp$importance,1,mean),decreasing=T))
+    res0<-data.frame(vars=variables)
+    for(x in variables){
+      updateTextInput(session,paste0("sim_r",x), value=F)
+
+    }
+  })
+  observeEvent(input$sim_run,{
+    vals_sim$newdata<-vals$saved_data[[input$data_sim]]
+
+    vals_sim$sim_res0<-res0<-getsim_params()
+    #input<-readRDS('input.rds')
+    #vals_sim<-readRDS('vals_sim.rds')
+    #vals_sim$sim_res0<-readRDS("sim_res0.rds")
+
+    #vals_sim$sim_ids<-readRDS("sim_ids.rds")
+    res0<-vals_sim$sim_res0
+    ids<-vals_sim$sim_ids
+
+    data<-vals$saved_data[[input$data_sim]]
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    obs<-factor(c(m$trainingData[,1],attr(m,"sup_test")))
+    newdata<-rbind(m$trainingData[-1],attr(m,"test"))
+
+
+
+    for(i in 1:nrow(res0)){
+      if(any(res0[c('sim_m','sim_r')][i,])){
+        picvar<-as.character(res0$vars[i])
+        if(isTRUE(res0[i,'sim_m'])){
+          newdata[ids,picvar]<-newdata[ids,picvar]*res0$sim_a[i]
+        }
+        if(isTRUE(res0[i,'sim_r'])){
+          newdata[ids,picvar]<-sample(newdata[ids,picvar])
+        }
+      }
+      vals_sim$newdata<-newdata
+    }
+
+  })
+  observeEvent(input$sim_reset,{
+    vals_sim$newdata<-vals$saved_data[[input$data_sim]]
+  })
+  observe({
+    req(input$data_sim)
+    if(is.null(vals_sim$newdata)){
+      vals_sim$newdata<-vals$saved_data[[input$data_sim]]
+    }
+  })
+  observeEvent(input$data_sim,{
+    vals_sim$newdata<-NULL
+  })
+  observeEvent(input$sim_vars2_cell_edit, {
+    row  <- input$sim_vars2_cell_edit$row
+    clmn <- input$sim_vars2_cell_edit$col
+    value<-if(input$sim_vars2_cell_edit$value==""){NA}else{as.numeric(input$sim_vars2_cell_edit$value)}
+    vals_sim$sim_par[row, clmn] <- value
+  })
+  observe({
+    req(input$data_sim)
+    req(input$model_sim)
+    data<-vals$saved_data[[input$data_sim]]
+    m<-attr(data,"rf")[[input$model_sim]][[1]]
+    imp<-varImp(m)
+    variables<-names(sort(apply(imp$importance,1,mean),decreasing=T))
+    n<-length(variables)
+    df<-data.frame(Randomize=rep('Randomize', n),Multiply=rep('Multiply', n),Amount=rep(5,n))
+    rownames(df)<-variables
+    vals_sim$sim_par<-df
+
+  })
+  ####
+
 
   output$menu_div_out<-renderUI({
     # validate(need(length(vals$saved_data)>0,"No Datalist found"))
@@ -12949,6 +13497,18 @@ req(input$model_or_data=='som codebook')
     paste(name0,bag)
 
   })
+
+  observeEvent(input$create_codebook,{
+    if(input$create_codebook %% 2) {
+      vals$hand_save<-"create_codebook"
+      vals$hand_save2<-"Create Datalist with the Codebook and HC class"
+      vals$hand_save3<-NULL
+      showModal(
+        hand_save_modal()
+      )
+    }
+  })
+
   output$data_create<-renderUI({
     req(length(vals$hand_save)>0)
     req(input$hand_save=="create")
@@ -12956,7 +13516,7 @@ req(input$model_or_data=='som codebook')
     data_store$df<-F
 
     res<-switch (vals$hand_save,
-                 "create_codebook"=textInput("codebook_newname", NULL,paste0(input$data_X,"Codebook")),
+                 "create_codebook"=textInput("codebook_newname", NULL,paste0(input$data_hc,"Codebook")),
                  "Transpose Datalist"=textInput("transp_newname", NULL,bag_name()),
                  "Save new som in" = textInput("model_newname", NULL,bag_somname()),
                  "Save changes"= textInput("data_newname", NULL,bag_name()),
@@ -13280,7 +13840,7 @@ observeEvent(input$radio_cogs,{
               tosave['colors_img'],
               tosave[grep("cur",names(tosave))])
 
-    saveRDS(reactiveValuesToList(input),"input_out.rds")
+    saveRDS(reactiveValuesToList(input),"input.rds")
     saveRDS(tosave,"savepoint.rds")
     beep(10)
 

@@ -93,7 +93,7 @@ getroot_old<-function(newdata,obc,reps,modelist,weis,accu, scale,method,top.feat
   message<-if(inter_method=="Paired"){
     "Calculating Root..."
   } else{
-    "Calculating score loss..."
+    "Calculating permutated importance..."
   }
 
 
@@ -172,18 +172,18 @@ getinter_old<-function(newdata,obc,reps,modelist,weis,accu,scale=T,method, top.f
 }
 
 
-getroot<-function(newdata,obc,reps,modelist,weis,accu, scale,method,top.features, root=NULL, inter_method,progress=T, ms=NULL,type="modelist", feaimp=F){
+getroot<-function(newdata,obc,reps,modelist,weis,accu, scale,en_method,top.features, root=NULL, inter_method,progress=T, ms=NULL,type="modelist", feaimp=F, error=F){
 
   m<-modelist[[1]]
   score<-ifelse(m$modelType=="Classification","Accuracy",'Rsquared')
   message<-if(inter_method=="Paired"){
     "Calculating Root..."
   } else{
-    "Calculating score loss..."
+    "Calculating permutated importance..."
   }
 
 
-  tops<-gettop(modelist,scale,method,weis,top.features)
+  tops<-gettop(modelist,scale,en_method,weis,top.features)
   if(!is.null(root)){
     pic<- which(colnames(newdata)%in%root)
   }else {
@@ -224,8 +224,15 @@ getroot<-function(newdata,obc,reps,modelist,weis,accu, scale,method,top.features
   })
 
 
-  perfms0<-accu-perfms0
-  perfms0
+  if(isTRUE(error)){
+    e<-1-accu
+    p<-1-perfms0
+    perfms0<-p-e
+  } else{
+    perfms0<-accu-perfms0
+    perfms0
+  }
+
 
 
 
@@ -280,7 +287,7 @@ get_Acculoss<-function(newdata,modelist,scale,obc,weis,root,accu,sig,reps,type="
   )
   sigvars<-unique(reds[,3])
   attr(accumean,"sigvars")<-sigvars
-  beep(10)
+
   accumean
 
 }
@@ -314,7 +321,7 @@ getsig_aculoss_old<-function(acc, accu=NULL,sig){
   )
   sigvars<-unique(reds[,3])
   attr(accumean,"sigvars")<-sigvars
-  beep(10)
+
   accumean
 }
 getsig_aculoss<-function(acc, accu=NULL,sig,test="greater"){
@@ -335,7 +342,7 @@ getsig_aculoss<-function(acc, accu=NULL,sig,test="greater"){
   sigvars<-rownames(acc)[which(ps<=sig)]
 
   attr(accumean,"sigvars")<-sigvars
-  beep(10)
+
   accumean
 }
 
@@ -1085,7 +1092,7 @@ get_inter_results<-function(inter_res0, reps=5,sig=0.05,inter_method){
   root_inter$mean_loss_Var1_unique<-perfms0
   root_inter
 }
-get_interplot<-function(inter_res,palette="turbo",newcolhabs,cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13, leg="", main="",xlab="Interactions",ylab="Score loss (%)"){
+get_interplot<-function(inter_res,palette="turbo",newcolhabs,cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13, leg="", main="",xlab="Interactions",ylab="permutated importance (%)"){
 
   means<-do.call(data.frame,lapply(inter_res[1:2],function(x){
     apply(x,1,function(xx) mean(xx))
@@ -1377,9 +1384,13 @@ get_weig_faimp<-function(allimportance, en_method="weighted", weis=NULL){
 
 }
 
-
-plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,ylab="Variables",xlab="Importance", colby=c("models",'acculoss',"acc"), aculoss=NULL,facet_grid=T,nvars=10, sig=0.01, leg=if(colby=="models") {'Model'}else{"Score decrease (%)"},cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13,sigvars=NULL,size.sig=1.5, acc=NULL,title=NULL,modelist=NULL){
-  if(is.null(aculoss)){aculoss<-1}
+plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,ylab="Variables",xlab="Importance", colby=c("models",'acculoss',"acc"), aculoss=NULL,facet_grid=T,nvars=10, sig=0.01, leg=if(colby=="models") {'Model'}else{"Score decrease (%)"},cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13,sigvars=NULL,size.sig=1.5, acc=NULL,title=NULL,modelist=NULL,scale=T){
+  if(is.null(aculoss)){
+    accucopy<-T
+    aculoss<-rep(1,nrow(moldels_importance))
+  } else{
+    accucopy<-F
+  }
 
   if(is.null(nvars)){
     nvars<-nrow(moldels_importance)
@@ -1432,18 +1443,22 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
   }
   req(is.data.frame(df))
 
+  if(!is.null(acc)){
+    colnames(df)[2]<-"model"}
+
   if(length(sigvars)>0){
+
     if(class(sigvars)=="list"){
-      newres<-split(df$variable,df$acculoss)
+      names(sigvars)<-names(modelist)
+      newres<-split(df,df$model)
       x<-names(newres)[1]
-      names(sigvars)<-names(newres)
-      ss<-do.call(c,lapply(names(newres),function(x){
-        res<-data.frame(newres[x])
-        res$sig<-NA
-        res$sig[res[,1]%in%sigvars[[x]]]<-"1"
-        res$sig
-      }))
-      df$sig<-factor(ss)
+      df<-data.frame(do.call(rbind,lapply(names(newres),function(x){
+        temp<-newres[[x]]
+        temp$sig<-NA
+        temp$sig[which(temp$variable%in%sigvars[[x]])]<-"1"
+        temp
+      })))
+      df$sig<-factor(df$sig)
 
     }else{
       df$sig<-NA
@@ -1455,8 +1470,39 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
 
 
 
-  df$sig_pos<--1
+  df$sig_pos<--5
   df<-df[order(df$sig),]
+
+  mm<-max(df$value)
+
+  if(scale==T){
+    lisss<-if(!is.null(acc)){
+      if(!is.null(modelist)){
+        df$acculoss<-df$value
+        split(df,list(df$model,df$rep))
+      } else{
+        df$acculoss<-df$value
+        split(df,list(df$model))
+      }
+
+
+
+    } else{
+      split(df,df$model)
+    }
+    df<-data.frame(
+      do.call(rbind,lapply(lisss,function(x){
+
+
+        x$value<- x$value/mm*100
+        x$acculoss <-x$acculoss/mm*100
+        x
+      }))
+    )
+
+  }
+
+
   if(colby=="models"){
     col= getcolhabs(newcolhabs,palette,nrow(df))
     p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=model))+  scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, ncol(moldels_importance)))
@@ -1465,21 +1511,53 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
 
     if(!is.null(modelist)){
       df_naomit<-na.omit(df)
+
+      df$variable<-factor(df$variable)
+
+
+      df2<-data.frame(aggregate(df[,c('value','acculoss')],df[c("variable","model")], sum))
+      df2<-data.frame(
+        do.call(rbind,lapply(split(df2,df2$model),function(x){
+          x$value<-scales::rescale(x$value,c(0,100))
+          x$value<-scales::rescale(x$acculoss,c(0,100))
+          x
+        }))
+      )
+
+      df2$value<-scales::rescale(df2$value,c(0,100))
+      df2$value<-scales::rescale(df2$acculoss,c(0,100))
+
+
+      df2$model<-factor(df2$model)
+
+
       #df<-df[order(df$sig, decreasing=T),]
-      p<-ggplot(df, aes(x=reorder(variable,value, mean)))+
-      geom_bar(stat="identity", aes(y=value, fill=acculoss, group=acculoss))+
-      scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, length(modelist)))+coord_flip()
+      p<-ggplot(df2, aes(reorder(variable,acculoss, mean), value, fill=model))+
+        geom_bar(stat = "identity")+ scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, nlevels(df2$model)))+coord_flip()
+
+
+
     if(length(sigvars)>0){
       p<-p+geom_point(aes(y=sig_pos, shape=sig), data=df_naomit)+scale_shape_manual(name="",values =8, labels=c(paste0("p.value","\u2264",sig)), breaks=1)+
-        labs(x=xlab, y=ylab, shape=NULL)
-    }
+        guides(fill = guide_legend(override.aes = list(colour = NA)))+
+        labs(x=xlab, y=ylab, shape=NULL)+scale_color_manual(guide="none", values=getcolhabs(newcolhabs,palette, nlevels(df2$model)))
+
+
+      }
     } else{
-      p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=acculoss))
-      p<-p+scale_fill_gradientn(name=leg,colors=getcolhabs(newcolhabs,palette,100))
-      p<-p + geom_bar(stat = "identity", position="dodge")+coord_flip()
-    }
+      if(isTRUE(accucopy)){
+        df$acculoss<-df$value
+      }
+      df$variable<-factor(df$variable)
+      df2<-data.frame(aggregate(df[,c('value','acculoss')],df["variable"], sum))
 
-
+      df2$value<-scales::rescale(df2$value,c(0,100))
+      df2$value<-scales::rescale(df2$acculoss,c(0,100))
+      p0<-ggplot(df2, aes(reorder(variable,acculoss, mean), value))+
+        geom_bar(stat = "identity", fill=getcolhabs(newcolhabs,palette,1))+coord_flip()
+      p<-p0
+      p
+      }
   }
   # p + geom_bar(stat = "identity",aes(color=sig))+coord_flip()+scale_color_manual(values=c("red","blue"))
   if(is.null(modelist)){
@@ -1494,7 +1572,7 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
   if(isTRUE(facet_grid)){
     if(is.null(modelist)){
     p<-p + facet_grid(~factor(model, levels=colnames(moldels_importance)))+xlab(xlab)+ylab(ylab)} else{
-      p<-p + facet_grid(~factor(acculoss, levels=names(modelist)))+xlab(xlab)+ylab(ylab)
+      p<-p + facet_grid(~factor(model, levels=names(modelist)))+xlab(xlab)+ylab(ylab)
     }
 
   }
@@ -1511,7 +1589,7 @@ p
 }
 
 plot_model_features2<-function(moldels_importance, palette="turbo", newcolhabs,ylab="Variables",xlab="Importance", colby=c("models",'aculoss'), aculoss=NULL,facet_grid=T,nvars=10, sig=0.01, leg=if(colby=="models") {'Model'}else{"Score decrease (%)"},cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13,sigvars=NULL){
-  if(is.null(aculoss)){aculoss<-1}
+  if(is.null(aculoss)){aculoss<-rep(0,nrow(moldels_importance))}
 
 
   if(is.null(nvars)){
