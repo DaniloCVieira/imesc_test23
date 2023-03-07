@@ -1588,8 +1588,7 @@ pbox<-function(res, palette="viridis", coefic=1.5, lab_out=NULL ,cex.lab=1, lwd=
   } else{
     srty<-1
     }
-  axis(if(isFALSE(horizontal)){2} else{1}, col="gray23",
-       col.axis="gray30", cex.axis=ysize, tck=tck, las=srty)
+  #axis(if(isFALSE(horizontal)){2} else{1}, col="gray23",col.axis="gray30", cex.axis=ysize, tck=tck, las=srty)
 
   if(length(boxout$out)>0){
     outliers<-which(res[,2] %in% c(boxout$out))
