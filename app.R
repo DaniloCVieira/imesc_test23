@@ -1,7 +1,6 @@
 
 # Launch the ShinyApp (Do not remove this comment)
 
-kohonen:::object.distances
 
 list.of.packages <- c('remotes')
 if(!length(grep("connect/apps",getwd()))>0){
