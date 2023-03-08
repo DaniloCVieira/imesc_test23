@@ -352,8 +352,13 @@ module_server_somplot <- function(input, output, session,vals,data_target,som_mo
 
   getobs_mapcode<-reactive({
     datalist<-vals$saved_data
+    #som_names<-names(attr(vals$saved_data[[vals$cur_data]],"som"))
+    #req(length(som_names)>0)
 
-    m<-attr(vals$saved_data[[vals$cur_data]],"som")[[as.character(vals$som_hc)]]
+    models<-attr(vals$saved_data[[vals$cur_data]],"som")
+    req(length(models)>0)
+    req(vals$cur_som_hc%in%names(models))
+    m<-models[[as.character(vals$cur_som_hc)]]
     res0<-unlist(
       lapply(datalist, function (x){
         identical(colnames(x),colnames(do.call(cbind,m$data)))

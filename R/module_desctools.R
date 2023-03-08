@@ -755,29 +755,14 @@ pic_pca_results<-reactive({
                     fluidRow(
                       div(uiOutput(ns("box_xaxis"))),
                       column(12,id=ns("pbox_xaxis"),
-                             div(span('+ Label:',
-                                      inline(
-                                        textInput(ns("box_xlab_text"),NULL , value=input$box_factor, width="120px")
-                                      )
-                             )),
-                             div(span("+ Label size:",inline(
-                               numericInput(ns("box_xlab_size"),NULL,value=vals$box_xlab_size,step=.1, width="75px")
-                             ))),
-                             div(span("+ Label font:",inline(
-                               pickerInput(ns("box_xlab_font"),NULL,choices=c("plain","bold","italic","bold_italic"), width="80px", selected=vals$box_xlab_font)
-                             ))),
-                             div(span("+ Label adjust:",inline(
-                               numericInput(ns("box_xlab_adj"),NULL,value=vals$box_xlab_adj,step=.1, width="75px")
-                             ))),
-                             div(span("+ Axis size:",inline(
-                               numericInput(ns("box_xsize"),NULL,value=vals$box_xsize,step=.1, width="75px")
-                             ))),
-                             div(span("+ Axis rotation:",inline(
-                               numericInput(ns("box_srt"),NULL,value=vals$box_srt,step=1, width="75px")
-                             ))),
-                             div(span("+ Axis lab-adjust:",inline(
-                               numericInput(ns("box_xlab.adj"),NULL,value=0,step=1, width="55px")
-                             ))))
+                             div(span('+ Label:',inline(textInput(ns("box_xlab_text"),NULL , value=input$box_factor, width="120px")))),
+                             #div(span("+ Label size:",inline(numericInput(ns("box_xlab_size"),NULL,value=vals$box_xlab_size,step=.1, width="75px")))),
+                             #div(span("+ Label font:",inline(pickerInput(ns("box_xlab_font"),NULL,choices=c("plain","bold","italic","bold_italic"), width="80px", selected=vals$box_xlab_font)))),
+                             #div(span("+ Label adjust:",inline(numericInput(ns("box_xlab_adj"),NULL,value=vals$box_xlab_adj,step=.1, width="75px")))),
+                            # div(span("+ Axis size:",inline(numericInput(ns("box_xsize"),NULL,value=vals$box_xsize,step=.1, width="75px")))),
+                             #div(span("+ Axis rotation:",inline(numericInput(ns("box_srt"),NULL,value=vals$box_srt,step=1, width="75px")))),
+                            # div(span("+ Axis lab-adjust:",inline(numericInput(ns("box_xlab.adj"),NULL,value=0,step=1, width="55px"))))
+                            )
                     )
              ),
 
@@ -790,27 +775,13 @@ pic_pca_results<-reactive({
                                         textInput(ns("box_ylab_text"),NULL , value=input$box_y, width="120px")
                                       )
                              )),
-                             div(span("+ Label size:",inline(
-                               numericInput(ns("box_ylab_size"),NULL,value=vals$box_ylab_size,step=.1, width="75px")
-                             ))),
-
-                             div(span("+ Label-font:",inline(
-                               pickerInput(ns("box_ylab_font"),NULL,choices=c("plain","bold","italic","bold_italic"), width="80px", selected=vals$box_ylab_font)
-                             ))),
-                             div(span("+ Label adjust:",inline(
-                               numericInput(ns("box_ylab_adj"),NULL,value=0,step=.1, width="75px")
-                             ))),
-
-                             div(span("+ Axis size:",inline(
-                               numericInput(ns("box_ysize"),NULL,value=vals$box_ysize,step=.1, width="75px")
-                             ))),
-                             uiOutput(ns("box_y_rotation")),
-                             div(span("+ min-value:",inline(
-                               numericInput(ns("ymin_box"),NULL,value=ymin_box,step=0.1, width="75px")
-                             ))),
-                             div(span("+ max-value:",inline(
-                               numericInput(ns("ymax_box"),NULL,value=ymax_box,step=0.5, width="75px")
-                             )))
+                             #div(span("+ Label size:",inline(numericInput(ns("box_ylab_size"),NULL,value=vals$box_ylab_size,step=.1, width="75px")))),
+                             #div(span("+ Label-font:",inline(pickerInput(ns("box_ylab_font"),NULL,choices=c("plain","bold","italic","bold_italic"), width="80px", selected=vals$box_ylab_font)))),
+                             #div(span("+ Label adjust:",inline(numericInput(ns("box_ylab_adj"),NULL,value=0,step=.1, width="75px")))),
+                             #div(span("+ Axis size:",inline(numericInput(ns("box_ysize"),NULL,value=vals$box_ysize,step=.1, width="75px")))),
+                            # uiOutput(ns("box_y_rotation")),
+                             div(span("+ min-value:",inline(numericInput(ns("ymin_box"),NULL,value=ymin_box,step=0.1, width="75px")))),
+                             div(span("+ max-value:",inline(numericInput(ns("ymax_box"),NULL,value=ymax_box,step=0.5, width="75px"))))
                       )
                     )
              ),

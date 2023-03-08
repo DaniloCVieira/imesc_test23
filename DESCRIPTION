@@ -36,6 +36,7 @@ Depends:
     ggrepel,
     ggridges,
     ggthemes,
+    ggnewscale,
     gplots,
     gstat,
     imputeMissings,

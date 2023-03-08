@@ -9940,8 +9940,8 @@ output$del_datalist_choices<-renderUser({
         } else{
           elbow_plot(vals$screeplot_results, sugg = sugg_WSS_data())
         }
-        vals$hc_tab2_plot<-recordPlot()
-        vals$hc_tab2_plot
+        vals$cur_hc_tab2_plot<-recordPlot()
+        vals$cur_hc_tab2_plot
 
       })
     })
@@ -9993,7 +9993,7 @@ output$del_datalist_choices<-renderUser({
     )
   })
   observeEvent(input$hc_tab,{
-    vals$hc_tab<-input$hc_tab
+    vals$cur_hc_tab<-input$hc_tab
   })
   output$hc_side1<-renderUI({
     req(input$hc_tab=='hc_tab1')
@@ -10068,8 +10068,8 @@ output$del_datalist_choices<-renderUser({
         req(input$model_or_data)
         req(input$method.hc0)
         suppressWarnings( hc_plot(phc(),col=getcolhabs(vals$newcolhabs,input$hcdata_palette,input$customKdata),labels=pclus_points_factor()))
-        vals$hc_tab3_plot<-recordPlot()
-        vals$hc_tab3_plot
+        vals$cur_hc_tab3_plot<-recordPlot()
+        vals$cur_hc_tab3_plot
       })
     )
   })
@@ -10106,7 +10106,7 @@ output$del_datalist_choices<-renderUser({
       "hc_tab",
       choiceNames=choiceNames,
       choiceValues =choiceValues,
-      selected=vals$hc_tab,
+      selected=vals$cur_hc_tab,
       status ="radio_hc"
     )
   })
@@ -10219,32 +10219,34 @@ output$del_datalist_choices<-renderUser({
   output$BMU_PLOT<-renderUI({
     renderPlot({
 
-      somC<-phc()
-      args<-vals[[ns_tab4("somplot_args")]]
-      #args<-readRDS("args.rds")
-      #somC<-readRDS("somC.rds")
 
-     # args<-saveRDS(args,"args.rds")
-     # somC<-saveRDS(somC,"somC.rds")
+      somC<-phc()
+      req(length(vals[[ns_tab4("somplot_args")]])>0)
+      args<-vals[[ns_tab4("somplot_args")]]
+      args$hc<-somC$som.hc
+      vals[["somplot_args_cur"]]<-args
+
+      #vals<-readRDS("savepoint.rds")
+      #args<-vals[["somplot_args_cur"]]
+
       p<-do.call(bmu_plot,args)
       m<-args$m
+      hc=args$hc
 
-      newhc<-get_neurons_hc(m,background_type="hc",property=NULL,hc=somC$som.hc)
+      newhc<-get_neurons_hc(m,background_type="hc",property=NULL,hc=hc)
 
       he<-do.call(rbind,args$hexs)
       he$group<-factor(newhc)
       bg_color<-args$newcolhabs[[args$bg_palette]](nlevels(newhc))
       bg_color<-lighten(bg_color,args$bgalpha)
-
-
-      p2<-p+new_scale_fill()+geom_polygon(data=he, mapping=aes(x=x, y=y, group=neu, fill=group), col=args$border)+scale_fill_manual(name="",values=bg_color,labels=levels(newhc))
+      p2<-p+ggnewscale::new_scale_fill()+geom_polygon(data=he, mapping=aes(x=x, y=y, group=neu, fill=group), col=args$border)+scale_fill_manual(name="",values=bg_color,labels=levels(newhc))
       p2$layers[[1]]<-NULL
       n<-length(p2$layers)
       p2$layers<-p2$layers[c(n,c(1:n)[-n])]
       p<-p2
 
 
-      vals$hc_tab4_plot<-p
+      vals$cur_hc_tab4_plot<-p
 
       p
     })
@@ -10273,8 +10275,8 @@ output$del_datalist_choices<-renderUser({
 
       args<-vals[[ns_tab5("somplot_args")]]
       req(length(args)>0)
-      vals$hc_tab5_plot<-do.call(bmu_plot,args)
-      vals$hc_tab5_plot
+      vals$cur_hc_tab5_plot<-do.call(bmu_plot,args)
+      vals$cur_hc_tab5_plot
     })
   })
 
@@ -10669,7 +10671,7 @@ output$del_datalist_choices<-renderUser({
                paste("mean of",input$show_mapcode_errors), type="l", lwd=2, col="#05668D",  xlim=c(1,K))
 
         grid(ny=res_mean)
-        vals$hc_tab2_plot<-recordPlot()
+        vals$cur_hc_tab2_plot<-recordPlot()
         #legend("topl",lty=c(1,2),legend=c(input$data_mapcode,input$data_mapcode2), bty="n")
       })
     })
@@ -10921,7 +10923,7 @@ req(input$model_or_data=='som codebook')
             NULL,
             choices = names(attr(getdata_hc(),"som")),
             width="150px",
-            selected=vals$som_hc
+            selected=vals$cur_som_hc
           )
         )
       ),
@@ -10953,7 +10955,7 @@ req(input$model_or_data=='som codebook')
   })
 
   observeEvent(input$som_hc,{
-    vals$som_hc<-input$som_hc
+    vals$cur_som_hc<-input$som_hc
   })
   observeEvent(input$fixname,{
     vals$fixname<-input$fixname
@@ -11025,16 +11027,16 @@ req(input$model_or_data=='som codebook')
 
       hc<-cutdata1(data=getdata_hc(), method.hc=input$method.hc0, dist=input$disthc)
       plot(hc,labels = as.character(labhc()),main = input$hc_title)
-      vals$hc_tab1_plot<-recordPlot()
-      vals$hc_tab1_plot
+      vals$cur_hc_tab1_plot<-recordPlot()
+      vals$cur_hc_tab1_plot
     })
   })
   output$hcmodel_plot <- renderUI({
     req(input$model_or_data=='som codebook')
     renderPlot({
       plot(cutm(getmodel_hc(), input$method.hc0), main = input$hc_title)
-      vals$hc_tab1_plot<-recordPlot()
-      vals$hc_tab1_plot
+      vals$cur_hc_tab1_plot<-recordPlot()
+      vals$cur_hc_tab1_plot
     })
   })
 
@@ -13802,6 +13804,7 @@ observeEvent(input$radio_cogs,{
   cutsom.reactive<-reactive({
     req( input$customKdata)
     req(input$method.hc0)
+    req(!is.null(vals$hc_usewei))
    # req(input$hcdata_palette)
     m<-getmodel_hc()
     somC<-cutsom(m, input$customKdata, method.hc = input$method.hc0, palette=NULL,newcolhabs=vals$newcolhabs, dataX=do.call(cbind,m$data),weighted=vals$hc_usewei)
@@ -13832,13 +13835,12 @@ observeEvent(input$radio_cogs,{
 
   ## DOWNLOAD FUNCTION
   savereac<-reactive({
-
     tosave<-isolate(reactiveValuesToList(vals))
-    tosave<-c(tosave["saved_data"],
-              tosave["saved_maps"],
-              tosave["newcolhabs"],
-              tosave['colors_img'],
-              tosave[grep("cur",names(tosave))])
+    tosave<-tosave[-which(names(vals)%in%c("saved_data","newcolhabs",'colors_img'))]
+    tosave<-tosave[-which(unlist(lapply(tosave,function(x) object.size(x)))>1000)]
+    tosave$saved_data<-vals$saved_data
+    tosave$newcolhabs<-vals$newcolhabs
+    tosave$colors_img<-vals$colors_img
 
     saveRDS(reactiveValuesToList(input),"input.rds")
     saveRDS(tosave,"savepoint.rds")

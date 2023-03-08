@@ -223,7 +223,7 @@ bmu_plot<-function(m,hexs,points_tomap=NULL,bp=NULL,points=T,points_size=2,point
     points_tomap$label<-factor(points_tomap$label)
   }
 
-
+  req(length(hexs)>0)
   hc<-do.call(c,lapply(hexs,function(x) x$group[1]))
   req(length(hc[1])>0)
   if(hc[1]=="None"){
@@ -1546,16 +1546,7 @@ pbox<-function(res, palette="viridis", coefic=1.5, lab_out=NULL ,cex.lab=1, lwd=
     cex = cex.lab,
     bty = "n", plot=F, range=coefic
   )
-  font_xlab<-switch(font_xlab,
-                    "plain"=1,
-                    "bold"=2,
-                    "italic"=3,
-                    "bold_italic"=4)
-  font_ylab<-switch(font_ylab,
-                    "plain"=1,
-                    "bold"=2,
-                    "italic"=3,
-                    "bold_italic"=4)
+
 
   outliers<-boxout$out
 

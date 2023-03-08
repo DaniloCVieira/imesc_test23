@@ -9,7 +9,7 @@ module_ui_comp2 <- function(id){
 
 
     div(
-      #inline( actionButton(ns("teste_comb"),"SAVE")),
+      inline( actionButton(ns("teste_comb"),"SAVE")),
       inline(uiOutput(ns("teste_comb")))
     ),
     uiOutput(ns('COMB_comp2')))
@@ -184,11 +184,90 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     })
 
   })
+  inter_args<-reactive({
+    predtab<-get_predtab()
+    modelist<-vals$modellist2
+    newdata<-get_newdata()
+    class=which(colnames(modelist[[1]]$trainingData)==".outcome")
+    newdata<-newdata[,colnames(modelist[[1]]$trainingData)[-1]]
+    obc<-get_obc()
+    pred<-get_pred()
+    weis=get_weis()
+    args<-list(
+      newdata=newdata,
+      predtab=predtab,
+      weis=weis,
+      obc=obc,
+      pred=pred,
+      reps=input$inter_rep,
+      modelist=modelist,
+      sig=input$inter_sig,
+      top.features=input$inter_top,
+      scale=input$inter_scale,
+      en_method=input$en_method,
+      root=input$inter_root,
+      weitype=input$wei_datatype,
+      inter_method= input$inter_method
+    )
+    args
+  })
+
+
+  observeEvent(input$run_inter,{
+
+    args<-inter_args()
+    inter_res0<-do.call(interact_ml,args)
+
+    attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$inter_res0<-inter_res0
+    updateTabsetPanel(session,"ensemble_tab","tab2")
+    updateTabsetPanel(session,"ensemble_tab2",vals$ensemble_tab2)
+
+  })
+  output$interactions_plot<-renderUI({
+
+    i_scores<-get_inter_res0()
+    i_result<-i_importance(i_scores)
+    i_sig<-i_t.test(i_scores,i_result, sig=input$inter_sig)
+    importances_alone<-i_scores$score_alone
+    importances_both<-i_result
+    isig<-rownames(i_sig)[which(i_sig$Sig_both)]
+    args<-list(
+      moldels_importance=importances_both,
+      palette=input$pal_inter,
+      newcolhabs=vals$newcolhabs,
+      colby='acc',
+      facet_grid=F,
+      nvars=nrow(importances_both),
+      sig=NULL,
+      sigvars=isig,
+      size.sig=1.5,
+      acc=importances_both,
+      title=NULL,
+      modelist=NULL,
+      scale=T,
+      cex.axes=input$inter_cex.axes,
+      cex.lab=input$inter_cex.lab,
+      cex.main=input$inter_cex.main,
+      cex.leg=input$inter_cex.leg,
+      leg=input$inter_leg,
+      xlab=input$inter_xlab,
+      ylab=input$inter_ylab
+    )
+
+
+    renderPlot({
+     p<-do.call(plot_model_features,args)
+
+      vals$intercomb_plot<-p
+      p
+    })
+  })
+
 
   output$sig_forward<-renderUI({
     renderPrint({
       req(input$data_ensemble_X)
-      getsigs2_loss(get_inter_res0(),sig=0.05)
+      getsigs2_loss(get_inter_res0(),sig=input$inter_sig)
 
     })
   })
@@ -271,16 +350,6 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
 
 
 
-  observe({
-    req(input$data_ensemble_X)
-    req(!is.null(get_inter_res0()))
-    req(input$inter_sig)
-    req(input$inter_rep)
-
-    vals$inter_res<-try({
-      get_inter_results( get_inter_res0(), reps=input$inter_rep,sig=input$inter_sig,inter_method=input$inter_method)
-    })
-  })
 
   output$interactions_result<-renderUI({
     div(style="overflow-x: scroll",
@@ -294,32 +363,11 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     )
   })
 
-  output$interactions_df<-DT::renderDataTable({
-    data.frame(vals$inter_res$diff_to_root)
-  },options = list(pageLength = 20, info = FALSE,lengthMenu = list(c(20, -1), c( "20","All")), autoWidth=T,dom = 'lt'), rownames = TRUE,class ='cell-border compact stripe')
+  output$interactions_df<-DT::renderDataTable({},options = list(pageLength = 20, info = FALSE,lengthMenu = list(c(20, -1), c( "20","All")), autoWidth=T,dom = 'lt'), rownames = TRUE,class ='cell-border compact stripe')
 
 
 
-  output$interactions_plot<-renderUI({
-    renderPlot({
-      req(input$pal_inter)
-      req(input$data_ensemble_X)
-      req(length(vals$inter_res)>0)
-      req(length(get_inter_res0())>0)
-      vals$intercomb_plot<-get_interplot2(vals$inter_res,
-                                          palette=input$pal_inter,
-                                          vals$newcolhabs,
-                                          cex.axes=input$inter_cex.axes,
-                                          cex.lab=input$inter_cex.lab,
-                                          cex.main=input$inter_cex.main,
-                                          cex.leg=input$inter_cex.leg,
-                                          leg=input$inter_leg,
-                                          xlab=input$inter_xlab,
-                                          ylab=input$inter_ylab)
 
-      vals$intercomb_plot
-    })
-  })
 
 
 
@@ -386,7 +434,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
       div("+ Axes size",inline(numericInput(ns("inter_cex.axes"),NULL, value=13, width="75px", step=1))),
       div("+ Label size",inline(numericInput(ns("inter_cex.lab"),NULL, value=14, width="75px", step=1))),
       div("+ Label size",inline(numericInput(ns("inter_cex.leg"),NULL, value=13, width="75px", step=1))),
-      div("+ Xlab",inline(textInput(ns("inter_ylab"), NULL, 'Uncertainty', width="200px")),
+      div("+ Xlab",inline(textInput(ns("inter_ylab"), NULL, 'Importance', width="200px")),
           div("+ Ylab",inline(textInput(ns("inter_xlab"), NULL, 'Variables', width="200px"))),
       ),
       div("+ Legend title",inline(textInput(ns("inter_leg"), NULL, "", width="200px")))
@@ -559,24 +607,34 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     )
   })
 
-  output$side_filter_feature_plot_nvars<-renderUI({
-    if(input$ensemble_tab=='tab1'){
-      req(input$ensemble_tab1=='tab2')}
-    if(input$ensemble_tab=='tab2'){
-      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab5b")}
-    req(isFALSE(input$score_loss))
+
+  observeEvent(get_newdata(),{
     modelist<-vals$modellist2
     newdata<-get_newdata()
     class=which(colnames(modelist[[1]]$trainingData)==".outcome")
     newdata<-newdata[,colnames(modelist[[1]]$trainingData)[-1]]
+    vals$aculoss_npic<-ncol(newdata)
+  })
+
+  output$side_filter_feature_plot_nvars<-renderUI({
+    req(!is.null(vals$aculoss_npic))
+    if(input$ensemble_tab=='tab1'){
+      req(input$ensemble_tab1=='tab2')}
+    if(input$ensemble_tab=='tab2'){
+      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab5b")}
+    #req(isFALSE(input$score_loss))
 
     div(
       span("+ Number of variables:",tiphelp("Filter variables with the highest mean importance"),
            inline(
-             numericInput(ns("aculoss_npic"),NULL, value=ncol(newdata), width="75px", step=1)
+             numericInput(ns("aculoss_npic"),NULL, value=vals$aculoss_npic, width="75px", step=1)
            )
       )
     )
+  })
+
+  observeEvent(input$aculoss_npic,{
+    vals$aculoss_npic<-input$aculoss_npic
   })
 
 
@@ -770,6 +828,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   output$Ensemble_tab5<-renderUI({
    args<-getargs_ensemble_feaimp()
 
+   saveRDS(args,'args.rds')
     renderPlot({
       vals$feaimp_plot2<-do.call(plot_model_features,args)
       vals$feaimp_plot2
@@ -886,42 +945,6 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   })
 
 
-  validation_names<-reactive({
-    newdata<-vals$saved_data[[input$data_ensemble_X]]
-    sup_test<-attr(vals$modellist2[[1]],"supervisor")
-
-    datalist<-vals$saved_data
-    if(vals$modellist2[[1]]$modelType=="Classification"){
-      datalist=lapply(datalist,function(x) attr(x,"factors"))}
-
-
-    res1<-unlist(
-      lapply(datalist, function (x){
-        nrow(x)==nrow(newdata)
-      })
-    )
-    req(length(res1)>0)
-    datalist<-datalist[which(res1)]
-    # rownames(datalist[[1]])<-1:nrow(datalist[[1]])
-
-    res2<-unlist(
-      lapply(datalist, function (x){
-        sum(rownames(x)==rownames(newdata))==nrow(newdata)
-      })
-    )
-
-    datalist<-datalist[which(res2)]
-    #colnames(datalist[[1]])<-1:ncol(datalist[[1]])
-    res0<-unlist(
-      lapply(datalist, function (x){
-        res<-any(colnames(x)==sup_test)
-      })
-    )
-    req(length(res0)>1)
-
-    resul<-names(which(res0))
-    resul
-  })
 
   observeEvent(input$comb_create_errors_train2,{
     vals$hand_save<-"Create Datalist: comb training errors -obs"
@@ -1124,18 +1147,6 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
 
 
 
-  output$pick_compobs_pred<-renderUI({
-    req(input$comppred_which=="Datalist")
-    sup_test<-attr(vals$modellist2[[1]],"supervisor")
-    supname<-paste0("+ Observed Y [",sup_test,"]")
-    div(
-      span(supname,tipify(icon("fas fa-question-circle"),"Data containing observed values to be compared with predicted values"),
-           pickerInput(ns("obs_cm_pred"),
-                       NULL,names(vals$saved_data[validation_names()]), width="200px"
-                       ,selected=vals$obs_cm_pred
-           ))
-    )
-  })
 
   output$forest_margin<-renderUI({
     req(vals$modellist2[[1]]$modelType=="Regression")
@@ -1461,6 +1472,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     tosave$colors_img<-vals$colors_img
     tosave$ensemble_args<-getargs_root()
     tosave$ensemble_args_plot<-getargs_plot_scoreloss()
+
     #tosave$ensemble_args_feaimp<-getargs_ensemble_feaimp()
    # tosave$permimp_model_args<-permimp_model_args()
     #
@@ -1729,13 +1741,52 @@ p(
     supname<-paste0("+ Validation data (Y) [",sup_test,"]")
     #if(is.null(vals$cur_obc)){}
 
-    res<-attr(m,"Y")
-    vals$cur_obc<-gsub("\\::.*","",gsub(" ","",res))
+    #res<-attr(m,"Y")
+    #vals$cur_obc<-gsub("\\::.*","",gsub(" ","",res))
     div(style="color: #05668D",id=ns("validation_picker"),
         strong(
           span(supname,tipify(icon("fas fa-question-circle"),"Validation dataset. Data containing observed values to be compared with predicted values"),
           )),
         pickerInput(ns("obc"),NULL,names(vals$saved_data[validation_names()]), width="200px",selected=vals$cur_obc))})
+
+
+  validation_names<-reactive({
+    newdata<-vals$saved_data[[input$data_ensemble_X]]
+    sup_test<-attr(vals$modellist2[[1]],"supervisor")
+
+    datalist<-vals$saved_data
+    if(vals$modellist2[[1]]$modelType=="Classification"){
+      datalist=lapply(datalist,function(x) attr(x,"factors"))}
+
+
+    res1<-unlist(
+      lapply(datalist, function (x){
+        nrow(x)==nrow(newdata)
+      })
+    )
+    req(length(res1)>0)
+    datalist<-datalist[which(res1)]
+    # rownames(datalist[[1]])<-1:nrow(datalist[[1]])
+
+    res2<-unlist(
+      lapply(datalist, function (x){
+        sum(rownames(x)==rownames(newdata))==nrow(newdata)
+      })
+    )
+
+    datalist<-datalist[which(res2)]
+    #colnames(datalist[[1]])<-1:ncol(datalist[[1]])
+    res0<-unlist(
+      lapply(datalist, function (x){
+        res<-any(colnames(x)==sup_test)
+      })
+    )
+    req(length(res0)>1)
+
+    resul<-names(which(res0))
+    resul
+  })
+
 
 
   output$side_ensemble<-renderUI({
@@ -1797,7 +1848,7 @@ p(
       req(input$ensemble_tab2%in%c("tab1","tab2","tab3","tab6"))
       if(input$ensemble_tab2=="tab6"){
         req(!is.null(get_inter_res0()))
-        req(!is.null(vals$inter_res))
+
         req(input$inter_show=='Results')
       }
     }
@@ -1817,7 +1868,7 @@ p(
       req(input$ensemble_tab2 %in% c('tab2','tab4',"tab5",'tab6',"tab5b"))
       if(input$ensemble_tab2=="tab6"){
         req(!is.null(get_inter_res0()))
-        req(!is.null(vals$inter_res))
+
         req(input$inter_show=='Plot')
 
       }
@@ -2453,22 +2504,6 @@ p(
   })
 
 
-  observeEvent(input$run_inter,{
-    predtab<-get_predtab()
-    modelist<-vals$modellist2
-    newdata<-get_newdata()
-    class=which(colnames(modelist[[1]]$trainingData)==".outcome")
-    newdata<-newdata[,colnames(modelist[[1]]$trainingData)[-1]]
-    obc<-get_obc()
-    pred<-get_pred()
-    weis=get_weis()
-      inter_res0<-getinteraction(newdata,predtab,weis,obc,pred,reps=input$inter_rep,modelist,sig=input$inter_sig,top.features=input$inter_top, scale=input$inter_scale, en_method=input$en_method,root=input$inter_root, weitype=input$wei_datatype,inter_method= input$inter_method)
-
-    attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$inter_res0<-inter_res0
-    updateTabsetPanel(session,"ensemble_tab","tab2")
-    updateTabsetPanel(session,"ensemble_tab2",vals$ensemble_tab2)
-
-  })
   observeEvent(input$run_aculoss,{
     if(input$ensemble_tab=="tab1"){
       get_scoreloss_models()

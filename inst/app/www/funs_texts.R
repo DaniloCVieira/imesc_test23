@@ -1,3 +1,164 @@
+
+
+i_alone_scores<-function(newdata,obc,reps,modelist,weis,accu, scale,en_method,top.features, root=NULL, inter_method,progress=T, ms=NULL,type="modelist", feaimp=F, error=F){
+  m<-modelist[[1]]
+  score<-ifelse(m$modelType=="Classification","Accuracy",'Rsquared')
+  message<-if(inter_method=="Paired"){
+    "Calculating Root..."
+  } else{
+    "Calculating permutated importance..."
+  }
+
+
+  tops<-gettop(modelist,scale,en_method,weis,top.features)
+  if(!is.null(root)){
+    pic<- which(colnames(newdata)%in%root)
+  }else {
+    pic<-which(colnames(newdata)%in%tops)}
+  cols_run<-colnames(newdata)[pic]
+  if(isTRUE(progress)){
+    session=getDefaultReactiveDomain()
+  } else{
+    session<-MockShinySession$new()
+  }
+  j=1
+  nmax<-reps*length(cols_run)
+  withProgress(min=0, max=nmax,message=message,session=session,{
+    performaces0<-lapply(1:length(cols_run),function(i){
+      re<-lapply(1:reps, i=i,function (j,i){
+        temp<-newdata
+        cols<-as.character(cols_run[i])
+        temp[,cols]<-sample(newdata[,cols])
+        pred<-if(type=="modelist"){
+          getpreds(modelist,temp,weis)
+        }else{predict(ms,temp)}
+        res<-postResample(pred,obc)
+
+
+        cat("\n Calculating scoreloss;", paste0("rep",j,"/var:",cols))
+        incProgress(1, session=session, message=paste0("rep_",j,"; var_",cols))
+        res[score]
+      })
+
+      reee<-matrix(unlist(re),nrow=1, dimnames = list(cols_run[i],paste0("Score",1:reps)))
+      reee
+    })
+    perfms0<-data.frame(do.call(rbind,performaces0))
+  })
+  perfms0
+}
+i_both_scores<-function(newdata,obc,reps,modelist,weis,accu,scale=T,method, top.features=10, root=NULL, inter_method=c("Paired","Forward","Backward","Tops"),type="modelist", progress=T){
+  m<-modelist[[1]]
+
+  parvar<-getparvar(inter_method,newdata,modelist,top.features,scale,weis,root)
+  perfms<-i_loop_both(parvar,reps,newdata,modelist,weis,obc, type, ms=ms, progress=progress)
+  perfms
+}
+i_loop_both<-function(parvar,reps,newdata,modelist,weis,obc, type="modelist", ms=NULL,progress=T){
+
+  score<-ifelse(modelist[[1]]$modelType=="Classification","Accuracy",'Rsquared')
+
+  nloop<-if(is.data.frame(parvar)){
+    nrow(parvar) } else{length(parvar)}
+  parloop<-if(is.data.frame(parvar)){
+    as.list(data.frame(t(parvar)))
+  } else{
+    parloop<-parvar
+  }
+  nsample<-nrow(newdata)
+  if(isTRUE(progress)){
+    session=getDefaultReactiveDomain()
+  } else{
+    session<-MockShinySession$new()
+  }
+  withProgress(min=0, max=length(parloop)*reps,message="Running....",session=session,{
+    i<-j<-1
+
+    performaces<- lapply(1:length(parloop), function(i){
+      re<-lapply(1:reps,i=i,function(j,i){
+
+        temp<-newdata
+        cols<-as.character(parloop[[i]])
+        cat(paste0("\n Rep", j, "; Var_",paste0(cols,collapse = "+")))
+        temp[cols]<-lapply(as.list(newdata[,cols, drop=F]),sample)
+        pred<-if(type=="modelist"){
+          getpreds(modelist,temp,weis)
+        }else{predict(ms,temp)}
+        res<-postResample(pred,obc)
+        incProgress(1, message=paste0("inter_",i), session=session)
+        res[score]
+      })
+      reee<-data.frame(Var1=parloop[[i]][[1]],Var2=parloop[[i]][[2]],matrix(c(unlist(re)),nrow=1, dimnames = list(paste0(parloop[[i]],collapse="::"),c(paste0("Score",1:reps)))))
+      reee
+    })
+
+  })
+  perfms<-data.frame(do.call(rbind,performaces))
+  perfms
+}
+interact_ml<-function(newdata,predtab,weis,obc,pred,reps,modelist,sig=0.05,top.features=10, scale=T, en_method="weighted", root=NULL, weitype, inter_method=c("Paired","Forward","Backward"),progress=T){
+  inter_method=match.arg(inter_method,c("Paired","Forward","Backward"))
+
+  m<-modelist[[1]]
+  predtrain<-pred
+  accu<-postResample(predtrain,obc)
+  accu<-if(m$modelType=="Classification"){accu["Accuracy"]
+  } else{accu['Rsquared']}
+  tops<-gettop(modelist,scale,method,weis,top.features)
+  perfms0<-i_alone_scores(newdata,obc,reps,modelist,weis,accu, scale,en_method,top.features, root=tops,inter_method=inter_method,progress)
+  inters0<-i_both_scores(newdata,obc,reps,modelist,weis,accu,scale,en_method, top.features, root=root,inter_method=inter_method, type="modelist", progress)
+
+  i_scores=list(score_alone=perfms0,score_both= inters0, accu=accu)
+  i_scores
+}
+
+i_importance<-function(i_scores){
+  accu<-i_scores$accu
+  score_alone=i_scores$score_alone
+  score_both=i_scores$score_both[,-c(1:2)]
+  score_vars=i_scores$score_both[c(1:2)]
+  df<-do.call(rbind,lapply(1:nrow(score_vars),function(i){
+    v1<-score_vars[i,"Var1"]
+    v2<-score_vars[i,"Var2"]
+    imp_i<-accu-score_alone[v1,]
+    imp_j<-accu-score_alone[v2,]
+    imp_ij<- accu-score_both[i,]
+    ai=accu-imp_i-imp_ij
+    aj=accu-imp_j-imp_ij
+    aij = accu - imp_i - imp_j - imp_ij
+    imp_ij = accu - ai - aj + aij
+    imp_ij
+  }))
+  df<-data.frame(df)
+  rownames(df)<-rownames(score_vars)
+  df
+}
+i_t.test<-function(i_scores,i_result, sig){
+  accu<-i_scores$accu
+  score_alone=i_scores$score_alone
+  score_both=i_scores$score_both[,-c(1:2)]
+  score_vars=i_scores$score_both[c(1:2)]
+  i_result5<-data.frame(do.call(rbind,lapply(1:nrow(score_vars),function(i){
+    v1<-score_vars[i,"Var1"]
+    v2<-score_vars[i,"Var2"]
+    imp_i<-accu-score_alone[v1,]
+    imp_j<-accu-score_alone[v2,]
+    imp_ij<-i_result[i,]
+    i_result3<-data.frame(t(rbind(imp_i,imp_j,imp_ij)))
+    i_result4<-reshape2::melt(data.frame(id=rownames(i_result3),i_result3),'id')
+    res<-pairwise.t.test(i_result4$value,i_result4$variable, alternative="greater", paired=T)
+    #res$p.value[2,]<sig
+    siggg<-sum(res$p.value[2,]<sig)==2
+    re<-data.frame(res$p.value[2,1],as.logical(siggg))
+    colnames(re)<-c("p_value","Sig_both")
+    re
+  })))
+
+  rownames(i_result5)<-rownames(score_vars)
+  i_result5
+}
+
+
 mergedatacol<-function(datalist,rm_dup=T){
   {
 
@@ -84,92 +245,6 @@ getrow_missing<-function(data){
   res
 }
 
-
-
-getroot_old<-function(newdata,obc,reps,modelist,weis,accu, scale,method,top.features, root=NULL, inter_method,progress=T, ms=NULL,type="modelist"){
-
-  m<-modelist[[1]]
-  score<-ifelse(m$modelType=="Classification","Accuracy",'Rsquared')
-  message<-if(inter_method=="Paired"){
-    "Calculating Root..."
-  } else{
-    "Calculating permutated importance..."
-  }
-
-
-  tops<-gettop(modelist,scale,method,weis,top.features)
-  if(!is.null(root)){
-    pic<- which(colnames(newdata)%in%root)
-  }else {
-    pic<-which(colnames(newdata)%in%tops)}
-  cols_run<-colnames(newdata)[pic]
-  if(isTRUE(progress)){
-    session=getDefaultReactiveDomain()
-  } else{
-    session<-MockShinySession$new()
-  }
-  nmax<-reps*length(cols_run)
-  withProgress(min=0, max=nmax,message=message,session=session,{
-    performaces0<-lapply(1:reps, function(j){
-      testes<-list()
-      for(i in 1:length(cols_run)) {
-        temp<-newdata
-        cols<-as.character(cols_run[i])
-        temp[,cols]<-sample(newdata[,cols])
-        pred<-if(type=="modelist"){
-          getpreds(modelist,temp,weis)
-        }else{predict(ms,temp)}
-
-        res<-postResample(pred,obc)
-        testes[[i]]<-res[score]
-
-        cat("\n Calculating scoreloss;", paste0("rep",j,"/var:",cols))
-        incProgress(1, session=session, message=paste0("rep_",j,"; var_",cols))
-        names(testes)[i]<-cols[i]
-      }
-
-      do.call(c,testes)
-    } )
-
-    perfms0<-data.frame(do.call(cbind,performaces0))
-    colnames(perfms0)<-paste0("score_loss", 1:ncol(perfms0))
-    rownames(perfms0)<-cols_run
-
-  })
-
-
-  perfms0<-accu-perfms0
-  perfms0
-
-
-
-}
-getinter_old<-function(newdata,obc,reps,modelist,weis,accu,scale=T,method, top.features=10, root=NULL, inter_method=c("Paired","Forward","Backward","Tops"),type="modelist", progress=T){
-  m<-modelist[[1]]
-
-  parvar<-getparvar(inter_method,newdata,modelist,top.features,scale,weis,root)
-  perfms<-get_perfloop(parvar,reps,newdata,modelist,weis,obc, type, ms=ms, progress=progress)
-  seeds=attr(perfms,"seeds")
-
-
-  if(is.data.frame(parvar)){
-    inters<-data.frame(parvar,accu-perfms)
-    rownames(inters)<-apply(inters[,1:2],1,function(x) paste(x,collapse = "::"))
-  }else{
-    if(length(parvar[[2]])>1){
-      Var1<-do.call(c,lapply(parvar,function(x){paste(x[length(x)]) }))
-      inters<-data.frame(expand.grid(root,Var1),accu-perfms)
-      rownames(inters)<-paste0("...+",inters[,2])
-    } else{
-      Var2<-do.call(c,lapply(parvar,function(x){paste(x[length(x)]) }))
-      inters<-data.frame(Var1=attr(parvar,"varnames"),Var2,accu-perfms)
-
-      rownames(inters)<-inters[,2]
-    }
-  }
-  attr(inters,"seeds")<-seeds
-  inters
-}
 
 
 getroot<-function(newdata,obc,reps,modelist,weis,accu, scale,en_method,top.features, root=NULL, inter_method,progress=T, ms=NULL,type="modelist", feaimp=F, error=F){
@@ -492,6 +567,9 @@ getweis<-function(modelist,predtab, obc, en_method, weitype,newdata){
     weis<-getClass_wei(predtab,obc,modelist, en_method, weitype,newdata)}else {
       weis<-getReg_wei(modelist,newdata,obc, en_method,weitype)}
 }
+
+
+
 getinteraction<-function(newdata,predtab,weis,obc,pred,reps,modelist,sig=0.05,top.features=10, scale=T, en_method="weighted", root=NULL, weitype, inter_method=c("Paired","Forward","Backward")){
   inter_method=match.arg(inter_method,c("Paired","Forward","Backward"))
 
@@ -500,9 +578,12 @@ getinteraction<-function(newdata,predtab,weis,obc,pred,reps,modelist,sig=0.05,to
   accu<-postResample(predtrain,obc)
   accu<-if(m$modelType=="Classification"){accu["Accuracy"]
   } else{accu['Rsquared']}
-  perfms0<-getroot(newdata,obc,reps,modelist,weis,accu, scale,en_method,top.features, root=root,inter_method=inter_method)
-  inters<-getinter(newdata,obc,reps,modelist,weis,accu,scale,en_method, top.features, root=root,inter_method=inter_method, type="modelist")
-  list(perfms0=perfms0,inters=inters)}
+  perfms0<-getroot(newdata,obc,reps,modelist,weis,accu, scale,en_method,top.features, root=root,inter_method=inter_method,progress)
+  inters0<-getinter(newdata,obc,reps,modelist,weis,accu,scale,en_method, top.features, root=root,inter_method=inter_method, type="modelist", progress=F)
+  inters=list(perfms0=perfms0,inters=inters0)
+  inters
+}
+
 
 
 get_ensemble_pred<-function(predtab,modelist, en_method=c("weighted","non-weighted"), obc=NULL, weitype,newdata,weis){
@@ -1082,13 +1163,6 @@ get_inter_results<-function(inter_res0, reps=5,sig=0.05,inter_method){
   interaction_results<-interaction_results[cols]
 
   root_inter$diff_to_root<-interaction_results
-
-
-
-
-
-
-
   root_inter$mean_loss_Var1_unique<-perfms0
   root_inter
 }
@@ -1384,6 +1458,7 @@ get_weig_faimp<-function(allimportance, en_method="weighted", weis=NULL){
 
 }
 
+
 plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,ylab="Variables",xlab="Importance", colby=c("models",'acculoss',"acc"), aculoss=NULL,facet_grid=T,nvars=10, sig=0.01, leg=if(colby=="models") {'Model'}else{"Score decrease (%)"},cex.axes=13,cex.lab=14,cex.main=15,cex.leg=13,sigvars=NULL,size.sig=1.5, acc=NULL,title=NULL,modelist=NULL,scale=T){
   if(is.null(aculoss)){
     accucopy<-T
@@ -1392,19 +1467,9 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
     accucopy<-F
   }
 
-  if(is.null(nvars)){
-    nvars<-nrow(moldels_importance)
-  }
 
-  if(colby%in% c("models",'acculoss')){
-  pic<-order(apply(moldels_importance,1,mean),decreasing = T)[1:nvars]
-
-  col_names<-rownames(moldels_importance)[pic]
-  moldels_importance<-moldels_importance[col_names,,drop=F]
-
-}
   if(colby=="models"){
-    validate(need(nvars<=nrow(moldels_importance),paste0("number of variables must be less than or equal to the number of variables in the model:",nrow(moldels_importance))))
+    #validate(need(nvars<=nrow(moldels_importance),paste0("number of variables must be less than or equal to the number of variables in the model:",nrow(moldels_importance))))
     df<-data.frame(reshape2::melt(data.frame(id=rownames(moldels_importance),moldels_importance), id=c("id")))
     colnames(df)<-c("variable","model","value")
     df$acculoss<-aculoss
@@ -1413,8 +1478,8 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
     req(length(aculoss)==length(rep(rownames(moldels_importance),each=ncol(moldels_importance))))
     names(aculoss)<-rep(rownames(moldels_importance),each=ncol(moldels_importance))
     accu_table<-data.frame(matrix(aculoss,nrow=nrow(moldels_importance),dimnames =list(rownames(moldels_importance),colnames(moldels_importance))))
-    moldels_importance<-moldels_importance[col_names,,drop=F]
-    aculoss<-unlist(accu_table[col_names,,drop=F])
+
+
     df<-data.frame(reshape2::melt(data.frame(id=rownames(moldels_importance),moldels_importance), id=c("id")))
     colnames(df)<-c("variable","model","value")
     df$acculoss<-aculoss
@@ -1501,20 +1566,29 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
     )
 
   }
+  if(is.null(nvars)){
+    nvars<-nrow(moldels_importance)
+  }
+
+
+
+
+
+  mean_vals<-tapply(df$value,df$variable, mean)
+  col_names<-names(mean_vals)[order(mean_vals,decreasing = T)[1:nvars]]
+  picvar<-which(df$variable%in%col_names)
+
 
 
   if(colby=="models"){
     col= getcolhabs(newcolhabs,palette,nrow(df))
-    p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=model))+  scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, ncol(moldels_importance)))
+    p <- ggplot(df[picvar,], aes(reorder(variable,value, mean), value, fill=model))+  scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, ncol(moldels_importance)))
     p<-p + geom_bar(stat = "identity", position="dodge")+coord_flip()
     } else{
 
     if(!is.null(modelist)){
       df_naomit<-na.omit(df)
-
       df$variable<-factor(df$variable)
-
-
       df2<-data.frame(aggregate(df[,c('value','acculoss')],df[c("variable","model")], sum))
       df2<-data.frame(
         do.call(rbind,lapply(split(df2,df2$model),function(x){
@@ -1523,16 +1597,15 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
           x
         }))
       )
-
       df2$value<-scales::rescale(df2$value,c(0,100))
       df2$value<-scales::rescale(df2$acculoss,c(0,100))
-
-
       df2$model<-factor(df2$model)
-
-
       #df<-df[order(df$sig, decreasing=T),]
-      p<-ggplot(df2, aes(reorder(variable,acculoss, mean), value, fill=model))+
+      mean_vals<-tapply(df2$acculoss,df2$variable, mean)
+      col_names<-names(mean_vals)[order(mean_vals,decreasing = T)[1:nvars]]
+      picvar<-which(df2$variable%in%col_names)
+
+      p<-ggplot(df2[picvar,], aes(reorder(variable,acculoss, mean), value, fill=model))+
         geom_bar(stat = "identity")+ scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, nlevels(df2$model)))+coord_flip()
 
 
@@ -1553,7 +1626,11 @@ plot_model_features<-function(moldels_importance, palette="turbo", newcolhabs,yl
 
       df2$value<-scales::rescale(df2$value,c(0,100))
       df2$value<-scales::rescale(df2$acculoss,c(0,100))
-      p0<-ggplot(df2, aes(reorder(variable,acculoss, mean), value))+
+
+      mean_vals<-tapply(df2$acculoss,df2$variable, mean)
+      col_names<-names(mean_vals)[order(mean_vals,decreasing = T)[1:nvars]]
+      picvar<-which(df2$variable%in%col_names)
+      p0<-ggplot(df2[picvar,], aes(reorder(variable,acculoss, mean), value))+
         geom_bar(stat = "identity", fill=getcolhabs(newcolhabs,palette,1))+coord_flip()
       p<-p0
       p
@@ -1631,10 +1708,18 @@ plot_model_features2<-function(moldels_importance, palette="turbo", newcolhabs,y
   if(colby=="models"){
     col= getcolhabs(newcolhabs,palette,nrow(df))
 
+    mean_vals<-tapply(df$value,df$variable, mean)
+    col_names<-names(mean_vals)[order(mean_vals,decreasing = T)[1:nvars]]
+    picvar<-which(df$variable%in%col_names)
 
-    p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=model))+  scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, ncol(moldels_importance)))
+    p <- ggplot(df[picvar,], aes(reorder(variable,value, mean), value, fill=model))+  scale_fill_manual(name=leg,values=getcolhabs(newcolhabs,palette, ncol(moldels_importance)))
   } else{
-    p <- ggplot(df, aes(reorder(variable,value, mean), value, fill=acculoss))+scale_fill_gradientn(name=leg,colors=getcolhabs(newcolhabs,palette,100))
+    mean_vals<-tapply(df$value,df$variable, mean)
+    col_names<-names(mean_vals)[order(mean_vals,decreasing = T)[1:nvars]]
+    picvar<-which(df$variable%in%col_names)
+
+
+    p <- ggplot(df[picvar,], aes(reorder(variable,value, mean), value, fill=acculoss))+scale_fill_gradientn(name=leg,colors=getcolhabs(newcolhabs,palette,100))
 
 
   }
