@@ -9,7 +9,7 @@ module_ui_comp2 <- function(id){
 
 
     div(
-      inline( actionButton(ns("teste_comb"),"SAVE")),
+     # inline( actionButton(ns("teste_comb"),"SAVE")),
       inline(uiOutput(ns("teste_comb")))
     ),
     uiOutput(ns('COMB_comp2')))
@@ -815,10 +815,6 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
       vals$feaimp_plot2<-do.call(plot_model_features,args)
       vals$feaimp_plot2
     })
-
-
-
-
   })
 
   output$Ensemble_tab6<-renderUI({

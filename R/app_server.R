@@ -13929,7 +13929,7 @@ observeEvent(input$radio_cogs,{
     div(class="footer",
         #p(em("by: Danilo C Vieira")),
         style="background: transparent; color: white",
-        inline(uiOutput("quick_save")),
+        #inline(uiOutput("quick_save")),
         inline(tipify(uiOutput("qnote"),"Creates a note for the Datalist", placement = 'top')
         )
     )
