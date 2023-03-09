@@ -1275,7 +1275,9 @@ pic_pca_results<-reactive({
   },options = list(pageLength = 20, info = FALSE,lengthMenu = list(c(20, -1), c( "20","All")), autoWidth=T,dom = 'lt'), rownames = T,class ='cell-border compact stripe')
 
 
-  observeEvent(input$data_upload0,{
+  observe({
+    req(input$data_upload0)
+    req(input$desc_options)
     req(input$desc_options=='PCA')
     validate(need(!anyNA(getdata_upload0()), "This functionality does not support missing values; Please use the transformation tool to the handle missing values."))
     X   = as.matrix(getdata_upload0())
