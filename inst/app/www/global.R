@@ -3,7 +3,7 @@ rm(list=ls())
 
 
 #last_update<-"2022-11-08"
-if(getwd()=="D:/R3/imesc/imesc"){
+if(getwd()=="D:/R3/imesc/imesc3"){
   last_update<-Sys.Date()
   saveRDS(last_update,"inst/app/www/last_update.rds")
 

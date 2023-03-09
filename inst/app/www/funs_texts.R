@@ -442,7 +442,7 @@ getsigs2_loss<-function(inter_res0,sig=0.05){
   reds
 }
 getReg_wei<-function(modelist,newdata,obc, en_method,weitype){
-req(is.numeric(obc))
+#req(is.numeric(obc))
   weis<-rep(1,length(modelist))
   if(en_method%in%c("non-weighted")){
     return(weis)
@@ -451,8 +451,8 @@ req(is.numeric(obc))
   class=which(colnames(m$trainingData)==".outcome")
   traindata<-data.frame(m$trainingData[-class])
   #req(sum(colnames(newdata)%in%colnames(colnames(m$trainingData)[-class])==ncol(newdata)))
-  req(sum(names(obc)%in%rownames(newdata))==length(obc))
-  newdata<-newdata[names(obc),colnames(m$trainingData)[-class]]
+  #req(sum(names(obc)%in%rownames(newdata))==length(obc))
+
   if(en_method=="accu_weighted") {
     if(weitype=="training"){
       weis<-do.call(rbind,lapply(modelist,function(m){
@@ -462,6 +462,7 @@ req(is.numeric(obc))
       } else{weis[,'Rsquared']}
     }
     if(weitype=="test") {
+      newdata<-newdata[names(obc),colnames(m$trainingData)[-class]]
       req(nrow(newdata)==length(obc))
 
       weis<-unlist(do.call(data.frame,lapply(modelist,function(m){
@@ -484,7 +485,7 @@ req(is.numeric(obc))
 
 
 getClass_wei<-function(predtab,obc,modelist, en_method, weitype="test",newdata){
-  req(is.factor(obc))
+ #req(is.factor(obc))
   req(length(predtab)>0)
   req(ncol(predtab)>1)
   req(length(weitype)==1)
@@ -1241,13 +1242,18 @@ get_interplot2<-function(inter_res,palette="turbo",newcolhabs,cex.axes=13,cex.la
 
 
 
+predcomb_table<-function(modelist,newdata, progress=T){
+  if(isTRUE(progress)){
+    session=getDefaultReactiveDomain()
+  } else{
+    session<-MockShinySession$new()
+  }
 
-
-predcomb_table<-function(modelist,newdata){
-  withProgress(min=0, max=length(modelist),message="Running...",{
+  withProgress(min=0, max=length(modelist),message="Running...",session=session,{
     res_compre<-lapply(modelist,newdata=newdata,function(x,newdata){
       try({
-        incProgress(1)
+        if(isTRUE(progress)){   incProgress(1)}
+
         trainingData<-x$trainingData
         trainingData<-trainingData[-which(colnames(trainingData)==".outcome")]
         res<-suppressWarnings(predict(x,newdata= newdata[which(colnames(newdata)%in%colnames(trainingData))]))

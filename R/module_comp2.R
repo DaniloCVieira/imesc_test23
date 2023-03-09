@@ -107,18 +107,18 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
                              value="tab5",
                              uiOutput(ns("Ensemble_tab5"))
                     ),
-                    tabPanel(strong("5.5. Permutation Importance"),
-                             value='tab5b',
-                             uiOutput(ns("Ensemble_tab5b"))
-                    ),
-                    tabPanel(strong("5.6. Interactions"),
+                    tabPanel(strong("5.6. Permutation Importance"),
                              value='tab6',
+                             uiOutput(ns("Ensemble_tab6"))
+                    ),
+                    tabPanel(strong("5.7. Interactions"),
+                             value='tab7',
                              div(
                                inline(uiOutput(ns("inter_method"))),
                                inline(uiOutput(ns('run_inter')))
                              ),
-                             uiOutput(ns("Ensemble_tab6")),
-                             uiOutput(ns("interactions_out"))
+                             uiOutput(ns("Ensemble_tab7")),
+                             uiOutput(ns("Ensemble_tab7_plot"))
                     )
 
 
@@ -272,7 +272,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     })
   })
 
-  output$interactions_out<-renderUI({
+  output$Ensemble_tab7_plot<-renderUI({
     req(input$inter_show)
     if(input$inter_show=="Plot"){
       uiOutput(ns('interactions_plot'))
@@ -294,7 +294,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     div(
       div(strong("Weights")),
       #inline(strong("Weights results:")),
-      div(style="font-size: 11px;width: 110px;height: 100px; overflow-y: scroll",id="weistab",
+      div(style="font-size: 11px;width: 110px;height: 130px; overflow-y: scroll",id="weistab",
 
           inline(DT::dataTableOutput(ns("weis_table")))
       )
@@ -318,7 +318,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   output$weis_df<-DT::renderDataTable({},options = list(info = FALSE, autoWidth=T,dom = 't'), rownames = F,class ='cell-border compact stripe')
 
 
-  output$Ensemble_tab6<-renderUI({
+  output$Ensemble_tab7<-renderUI({
     req(input$data_ensemble_X)
     req(!is.null(get_inter_res0()))
     div(strong("+ Show:"),
@@ -452,7 +452,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   })
   output$side_interactions<-renderUI({
     req(input$ensemble_tab=="tab2")
-    req(input$ensemble_tab2=="tab6")
+    req(input$ensemble_tab2=="tab7")
     div(
       hr(),
       div(
@@ -504,7 +504,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     if(input$ensemble_tab=='tab1'){
       req(input$ensemble_tab1!="tab1")}
     if(input$ensemble_tab=='tab2'){
-      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab5b")}
+      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab6")}
 
     div(style="margin-top: 5px; margin-bottom: 5px",
         div(
@@ -521,7 +521,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
       req(input$ensemble_tab1=="tab3")}
 
     if(input$ensemble_tab=='tab2'){
-      req(input$ensemble_tab2=="tab5b")}
+      req(input$ensemble_tab2=="tab6")}
     div(
       div(
         strong("Permutation Importance",inline(actionLink(ns("help_loss"),icon("fas fa-question-circle"))))),
@@ -573,7 +573,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     if(input$ensemble_tab=='tab1'){
       req(input$ensemble_tab1!="tab1")}
     if(input$ensemble_tab=='tab2'){
-      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab5b")}
+      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab6")}
     div(
       div("+ Title size",inline(numericInput(ns("feaimp_cex.main"),NULL, value=13, width="75px", step=1))),
       div("+ Axes size",inline(numericInput(ns("feaimp_cex.axes"),NULL, value=13, width="75px", step=1))),
@@ -621,7 +621,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     if(input$ensemble_tab=='tab1'){
       req(input$ensemble_tab1=='tab2')}
     if(input$ensemble_tab=='tab2'){
-      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab5b")}
+      req(input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab6")}
     #req(isFALSE(input$score_loss))
 
     div(
@@ -766,21 +766,6 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     args
   })
 
-
-  output$Ensemble_tab5b<-renderUI({
-    req(!is.null(attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")))
-    acc<-attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$ensemble_resampling
-    validate(need(length(acc)>0,"Click in the flashing blue button 'Calculate Permutation Importance'"))
-
-    args<-getargs_plot_scoreloss()
-
-    p<-do.call(plot_model_features,args)
-    vals$ensemble_permimp<-p
-    renderPlot({vals$ensemble_permimp})
-  })
-
-
-
   getargs_ensemble_feaimp<-reactive({
     req(!is.null(get_predtab()))
     req(input$pal_combine)
@@ -790,9 +775,6 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     req(input$en_method)
     palette<-input$pal_combine
     req(input$data_ensemble_X)
-    if(isTRUE(input$score_loss)){
-      req(length(scoreloss_ensemble())>0)
-    }
 
     vals$allimportance<-comb_feaimp.reac()
     allimportance<- vals$allimportance
@@ -802,7 +784,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     weis<-get_weis()
     mean_importance<-get_weig_faimp(allimportance, en_method=input$en_method, weis=weis)
     moldels_importance<-data.frame(mean_importance)
-    aculoss<-scoreloss_ensemble()
+    aculoss<-NULL
     args<-list(
       moldels_importance=moldels_importance,
       palette=palette,
@@ -826,9 +808,9 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   })
 
   output$Ensemble_tab5<-renderUI({
-   args<-getargs_ensemble_feaimp()
+    args<-getargs_ensemble_feaimp()
 
-   saveRDS(args,'args.rds')
+   # saveRDS(args,'args.rds')
     renderPlot({
       vals$feaimp_plot2<-do.call(plot_model_features,args)
       vals$feaimp_plot2
@@ -838,6 +820,23 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
 
 
   })
+
+  output$Ensemble_tab6<-renderUI({
+    req(!is.null(attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")))
+    acc<-attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$ensemble_resampling
+    validate(need(length(acc)>0,"Click in the flashing blue button 'Calculate Permutation Importance'"))
+
+    args<-getargs_plot_scoreloss()
+
+    p<-do.call(plot_model_features,args)
+    vals$ensemble_permimp<-p
+    renderPlot({vals$ensemble_permimp})
+  })
+
+
+
+
+
 
   output$page1<-renderUI({
 
@@ -911,7 +910,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   })
 
   output$Ensemble_tab3<-renderUI({
-
+    validate(need(length(get_obc())>0,"Validation data for performance calculation not found."))
     div(
       div(
         inline(DT::dataTableOutput(ns('observation_errors_reg'))),
@@ -937,6 +936,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     )
   })
   output$Ensemble_tab2<-renderUI({
+    validate(need(length(get_obc())>0,"Validation data for performance calculation not found."))
     div(
       uiOutput(ns("cmcomb")),
       uiOutput(ns("regcomb"))
@@ -944,8 +944,30 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
 
   })
 
+  output$cmcomb<-renderUI({
 
+    req(vals$modellist2[[1]]$modelType=="Classification")
+    div(
+      div(
+        inline(DT::dataTableOutput(ns('errors_class_global')))
+      ),
+      uiOutput(ns("conf_matrix")),
+      uiOutput(ns("conf_matrix_print"))
 
+    )
+  })
+
+  output$regcomb<-renderUI({
+    req(vals$modellist2[[1]]$modelType=="Regression")
+    div(
+      div(
+        p(strong("Global:")),
+        inline(DT::dataTableOutput(ns('comb_tab_errors0_train')))
+      )
+
+    )
+
+  })
   observeEvent(input$comb_create_errors_train2,{
     vals$hand_save<-"Create Datalist: comb training errors -obs"
     vals$hand_save2<-NULL
@@ -1098,6 +1120,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     plotOutput(ns("summ_trees"), width = paste0(input$qclass_width,"px"), height =paste0(input$qclass_height,"px"))
   })
   output$Ensemble_tab4<-renderUI({
+    validate(need(length(get_obc())>0,"Validation data for performance calculation not found."))
     choices<-if(vals$modellist2[[1]]$modelType=="Classification"){
       c('Accuracy','Error')
     } else{
@@ -1434,17 +1457,6 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     )
   })
 
-  output$regcomb<-renderUI({
-    req(vals$modellist2[[1]]$modelType=="Regression")
-    div(
-      div(
-        p(strong("Global:")),
-        inline(DT::dataTableOutput(ns('comb_tab_errors0_train')))
-      )
-
-    )
-
-  })
   getobs_reg<-reactive({
     sup_test<- attr(vals$modellist2[[1]],'supervisor')
     datalist<-vals$saved_data
@@ -1470,13 +1482,12 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     tosave$saved_data<-vals$saved_data
     tosave$newcolhabs<-vals$newcolhabs
     tosave$colors_img<-vals$colors_img
-    tosave$ensemble_args<-getargs_root()
-    tosave$ensemble_args_plot<-getargs_plot_scoreloss()
+    tosave$modellist2<-vals$modellist2
+    #tosave$ensemble_args<-getargs_root()
+    #tosave$ensemble_args_plot<-getargs_plot_scoreloss()
 
-    #tosave$ensemble_args_feaimp<-getargs_ensemble_feaimp()
-   # tosave$permimp_model_args<-permimp_model_args()
-    #
-    #
+
+
 
     saveRDS(tosave,"savepoint.rds")
     saveRDS(reactiveValuesToList(input),"input.rds")
@@ -1488,18 +1499,7 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
   observeEvent(input$teste_comb,{
     savereac()
   })
-  output$cmcomb<-renderUI({
 
-    req(vals$modellist2[[1]]$modelType=="Classification")
-    div(
-      div(
-        inline(DT::dataTableOutput(ns('errors_class_global')))
-      ),
-      uiOutput(ns("conf_matrix")),
-      uiOutput(ns("conf_matrix_print"))
-
-    )
-  })
 
   get_conf_matrix<-reactive({
     obs<-get_obc()
@@ -1611,12 +1611,23 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     req(is.data.frame(get_predtab()))
     req(insert_rv$page==2)
     if(vals$modellist2[[1]]$modelType=="Classification"){
-      choiceNames<-c(
-        "Weighted votes (adaptative)",
-        "Weighted votes (overall performace)",
-        "Majority votes"
-      )
-      choiceValues=c("weighted","accu_weighted","non-weighted")
+      if(is.null(get_obc())){
+
+        choiceNames<-c(
+          "Weighted votes (overall performace)",
+          "Majority votes"
+        )
+        choiceValues=c("accu_weighted","non-weighted")
+
+      } else{
+        choiceNames<-c(
+          "Weighted votes (adaptative)",
+          "Weighted votes (overall performace)",
+          "Majority votes"
+        )
+        choiceValues=c("weighted","accu_weighted","non-weighted")
+      }
+
     } else{
       choiceNames<-c(
         "Weighted Mean (overall performace)",
@@ -1649,13 +1660,19 @@ module_server_comp2 <- function (input, output, session,vals,df_colors,newcolhab
     req(insert_rv$page==2)
     req(!is.null(get_predtab()))
 
+    choices<-if(is.null(get_obc())){
+      c(list("Training data"="training"))
+    } else{
+      c(list('New data/validation set'="test"),
+         list("Training data"="training"))
+    }
+
     req(input$en_method=="weighted"|input$en_method=="accu_weighted")
     div(
       div(strong("Estimate weigths using:")),
       pickerInput(
         ns("wei_datatype"),NULL,
-        c(list('New data/validation set'="test"),
-          list("Training data"="training")),
+        choices,
         width="200px",selected=vals$wei_datatype
       )
     )
@@ -1829,7 +1846,7 @@ p(
   output$side_feature_plot<-renderUI({
     req(input$ensemble_tab)
     if(input$ensemble_tab=="tab1"){req(input$ensemble_tab1!='tab1')}else{
-      req(input$ensemble_tab2%in%c("tab2","tab5","tab5b"))
+      req(input$ensemble_tab2%in%c("tab2","tab5","tab6"))
     }
 
     div(
@@ -1845,8 +1862,8 @@ p(
     req(input$ensemble_tab)
     if(input$ensemble_tab=="tab1"){req(input$ensemble_tab1=='tab1')}
     if(input$ensemble_tab=="tab2"){
-      req(input$ensemble_tab2%in%c("tab1","tab2","tab3","tab6"))
-      if(input$ensemble_tab2=="tab6"){
+      req(input$ensemble_tab2%in%c("tab1","tab2","tab3","tab7"))
+      if(input$ensemble_tab2=="tab7"){
         req(!is.null(get_inter_res0()))
 
         req(input$inter_show=='Results')
@@ -1865,8 +1882,8 @@ p(
   output$side_download_plot<-renderUI({
     req(input$ensemble_tab)
     if(input$ensemble_tab=="tab1"){req(input$ensemble_tab1=="tab2")} else{
-      req(input$ensemble_tab2 %in% c('tab2','tab4',"tab5",'tab6',"tab5b"))
-      if(input$ensemble_tab2=="tab6"){
+      req(input$ensemble_tab2 %in% c('tab2','tab4',"tab5",'tab7',"tab6"))
+      if(input$ensemble_tab2=="tab7"){
         req(!is.null(get_inter_res0()))
 
         req(input$inter_show=='Plot')
@@ -1911,11 +1928,11 @@ p(
                vals$plot_ensemble<-vals$feaimp_plot2
                "ensemble_feature_importance_plot"
              },
-             "tab5b"={
+             "tab6"={
                vals$plot_ensemble<-vals$ensemble_permimp
                "ensemble_feature_importance_plot"
              },
-             "tab6"={
+             "tab7"={
                vals$plot_ensemble<-vals$intercomb_plot
                "ensemble_interactions_plot"
              }
@@ -1948,7 +1965,7 @@ p(
                vals$down_ensemble<-data.frame(vals$comb_down_errors_train)
                "ensemble_obs_errors"
              },
-             "tab6"={
+             "tab7"={
                vals$down_ensemble<-data.frame(vals$inter_res$diff_to_root)
                "ensemble_interactions"
              }
@@ -2000,7 +2017,7 @@ p(
     req(input$ensemble_tab)
     if(input$ensemble_tab=="tab1"){ req(input$ensemble_tab1!="tab1")}
     if(input$ensemble_tab=="tab2"){
-      req(input$ensemble_tab2=="tab2"|input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab5b")
+      req(input$ensemble_tab2=="tab2"|input$ensemble_tab2=="tab5"|input$ensemble_tab2=="tab6")
     }
 
     div(
@@ -2057,8 +2074,17 @@ p(
     class=which(colnames(modelist[[1]]$trainingData)==".outcome")
     newdata<-newdata[,colnames(modelist[[1]]$trainingData)[-1]]
     obc<-get_obc()
-    if(length(obc)==0){
-      get_OBC()
+
+    if(is.null(obc)){
+     li<-lapply(modelist,function(m){
+    accu<-postResample(m$pred$pred,m$pred$obs)
+    if(m$modelType=="Classification"){accu["Accuracy"]
+    } else{accu['Rsquared']}
+  })
+     res<-do.call(cbind,li)
+     return(res)
+
+
     }
 
     validate(need(length(obc)==nrow(newdata),"Error: The observed and predicted values have different lengths."))
@@ -2560,7 +2586,7 @@ p(
     attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$ensemble_resampling<-acc
     attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$scoreloss_ensemble<-rep200
     updateTabsetPanel(session,"ensemble_tab","tab2")
-    updateTabsetPanel(session,"ensemble_tab2","tab5b")
+    updateTabsetPanel(session,"ensemble_tab2","tab6")
 
   })
   get_scoreloss_models<-reactive({
@@ -2631,7 +2657,8 @@ p(
 
   })
   get_PRED<-reactive({
-    req(length(input$obc)>0)
+
+    #req(length(input$obc)>0)
     req(length(vals$modellist2)>0)
     req(input$data_ensemble_X)
     req(input$en_method)
@@ -2640,14 +2667,14 @@ p(
     obc<-NULL
     predtab<-get_predtab()
     modelist<-vals$modellist2
-    data<-vals$saved_data[[input$obc]]
     obc<-get_obc()
     pred<-get_ensemble_pred(
       predtab,modelist, en_method=input$en_method, obc=obc, weitype=input$wei_datatype,
       newdata=get_newdata(),weis=get_weis()
     )
     pred[,1]<-if(modelist[[1]]$modelType=="Classification"){
-      factor(pred[,1],levels = levels(obc))}else{
+
+      factor(pred[,1],levels =modelist[[1]]$levels)}else{
         pred
       }
     attr(vals$saved_data[[input$data_ensemble_X]],"ensemble")[[ input$ensemble_models]]$predictions<-pred
@@ -2668,7 +2695,7 @@ p(
         get_predtab(),
         get_obc(),
         vals$modellist2,
-        input$en_method,
+        en_method=input$en_method,
         weitype=input$wei_datatype,
         newdata=newdata
       )
@@ -2677,7 +2704,8 @@ p(
       req(input$wei_datatype)
       #req(length(get_obc())==length(nrow(newdata)))
       # rep(1,length(vals$modellist2))
-      getReg_wei(modelist=vals$modellist2,newdata=newdata,obc=get_obc(),en_method=input$en_method,weitype=input$wei_datatype)
+      args<-list(modelist=vals$modellist2,newdata=newdata,obc=get_obc(),en_method=input$en_method,weitype=input$wei_datatype)
+      do.call(getReg_wei,args)
 
     }
     if(!is.null(class_whei)){
