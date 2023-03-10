@@ -65,7 +65,7 @@ getfunc_script<-function(filename){
 
 
 #' @export
-data.rares_fun<-function(saved_data,cur_data,filter_data,cutlevel_obs,filter_datalist,selecvar,selecobs,seltree,na.omit,transf,scale,center,rareabund,pct_rare,rarefreq,pct_prev,raresing,obs_match,                     obs_match_datalist){
+data.rares_fun<-function(saved_data,cur_data,filter_data,cutlevel_obs,filter_datalist,selecvar,selecobs,seltree,na.omit,transf,scale,center,rareabund,pct_rare,rarefreq,pct_prev,raresing,obs_match,                     obs_match_datalist,cor_filter=NULL){
   try({
 req(cur_data)
     data <-  saved_data[[cur_data]]
@@ -181,11 +181,19 @@ req(cur_data)
     remove_IDs<-which(rowSums(is.na(data))==ncol(data))
     if(length(remove_IDs)>0){
       data<-data[-remove_IDs,,drop=F]}
-    data<-data_migrate(saved_data[[cur_data]],data,cur_data)
+
+    if(!is.null(cor_filter)){
+      data<-data[cor_filter]
+    }
+
+
+
+     data<-data_migrate(saved_data[[cur_data]],data,cur_data)
     nrow_o<-attr(data,'nobs_ori')
     nrow_g<-nrow(data)
     ncol_o<-attr(data,'nvar_ori')
     ncol_g<-ncol(data)
+
 
 
     newattribs<-if(is.null(attr(data,"transf"))){

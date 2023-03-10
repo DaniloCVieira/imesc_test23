@@ -2,6 +2,8 @@
 # Launch the ShinyApp (Do not remove this comment)
 
 
+
+
 list.of.packages <- c('remotes')
 if(!length(grep("connect/apps",getwd()))>0){
   new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]

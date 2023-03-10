@@ -104,7 +104,7 @@ module_server_desctools<-function (input,output,session,vals,df_colors,newcolhab
                                   )
                                 )
                        ),
-                      # tabPanel('Correlation plot',div(sidebarLayout(sidebarPanel(fluidRow(class="map_control_style",style="color: #05668D",uiOutput(ns('side_corplot')))),mainPanel(uiOutput(ns("corr_plot")))))),
+                       tabPanel('Correlation plot',div(sidebarLayout(sidebarPanel(fluidRow(class="map_control_style",style="color: #05668D",uiOutput(ns('corr_side')))),mainPanel(uiOutput(ns("corr_plot")))))),
                        tabPanel('PCA',
                                 div(
                                   sidebarLayout(
@@ -173,6 +173,172 @@ module_server_desctools<-function (input,output,session,vals,df_colors,newcolhab
     )
 
   })
+  output$corr_side<-renderUI({
+
+
+
+    cor_method = c("pearson", "kendall", "spearman")
+    cor_use=c( "complete.obs","everything", "all.obs", "na.or.complete", "pairwise.complete.obs")
+
+    cor_dendogram = c("both","row","column","none")
+    cor_scale = c("none","row", "column")
+    cor_Rowv = c('TRUE','FALSE')
+    cor_Colv=c('Rowv',T,F)
+    cor_revC=c('TRUE','FALSE')
+    cor_na.rm=c('TRUE','FALSE')
+    cor_labRow=c('TRUE','FALSE')
+    cor_labCol=c('TRUE','FALSE')
+    cor_cellnote=c('TRUE','FALSE')
+    cor_density.info=c("histogram","density","none")
+
+
+
+    div(
+      div(
+        span("+ Cutoff",
+             inline(numericInput(ns("cor_cutoff"),NULL,value = 1,min = 0.1,max = 1,step = .1, width='100px')
+             ))
+      ),
+
+
+      div(pickerInput(ns("cor_method"), span("+ Corr method",tiphelp("correlation coefficient to be computed")),
+                  choices=cor_method)),
+      div(pickerInput(ns("cor_use"), span("+ Use",tiphelp("method for computing covariances in the presence of missing values")),
+                      choices=cor_use)),
+      div(pickerInput(ns("cor_dendogram"), span("+ Dendogram",tiphelp("indicating whether to draw 'none', 'row', 'column' or 'both' dendrograms")),
+                  choices=cor_dendogram)),
+      div(pickerInput(ns("cor_scale"), span("+ Scale",tiphelp("indicating if the values should be centered and scaled in either the row direction or the column direction, or none. ")),
+                  choices=cor_scale)),
+      div(pickerInput(ns("cor_Rowv"), span("+ Rowv",tiphelp("If is TRUE, which implies dendrogram is computed and reordered based on row means")),
+                  choices=cor_Rowv)),
+      div(pickerInput(ns("cor_Colv"), span("+ Colv",tiphelp(" Colv='Rowv' means that columns should be treated identically to the rows.If is TRUE, which implies dendrogram is computed and reordered based on cols means")),
+                  choices=cor_Colv)),
+      div(pickerInput(ns("cor_revC"), span("+ revC",tiphelp("Indicating if the column order should be reversed for plotting")),
+                  choices=cor_revC)),
+      div(pickerInput(ns("cor_na.rm"), span("+ na.rm",tiphelp("indicating whether NAs should be removed")),
+                  choices=cor_na.rm)),
+      div(pickerInput(ns("cor_labRow"), span("+ labRow",tiphelp("show observation labels")),
+                  choices=cor_labRow)),
+      div(pickerInput(ns("cor_labCol"), span("+ labCol",tiphelp("show variable labels")),
+                  choices=cor_labCol)),
+      div(pickerInput(ns("cor_density.info"), span("+ density.info",tiphelp("indicating whether to superimpose a 'histogram', a 'density' plot, or no plot ('none') on the color-key.")),
+                      choices=cor_density.info)),
+
+      div(class="palette",span("+ Palette:",inline(
+        pickerInput(inputId=ns("cor_palette"),
+                    label = NULL,
+                    choices = vals$colors_img$val,
+                    choicesOpt = list(content = vals$colors_img$img), width="120px", selected=vals$cor_palette)
+      ))),
+      div(class="palette",span(span("+ NA color:",tiphelp("Color to use for missing value")),inline(
+        pickerInput(inputId=ns("cor_na.color"),
+                    label = NULL,
+                    choices =   vals$colors_img$val[getsolid_col()],
+                    choicesOpt = list(content =   vals$colors_img$img[getsolid_col()]),
+                    selected="gray",
+                    width="75px")
+      ))),
+      div(
+        span(span("+ sep row width:",tiphelp("space between rows")),
+             inline(numericInput(ns("cor_sepwidth_a"),NULL,value = 0.05,min = 0.1,max = 1,step = .01, width='100px')
+             ))
+      ),
+      div(
+        span(span("+ sep col width:",tiphelp("space between columns")),
+             inline(numericInput(ns("cor_sepwidth_b"),NULL,value = 0.05,min = 0.1,max = 1,step = .01, width='100px')
+             ))
+      ),
+      div(class="palette",span(span("+ Sep color:",tiphelp("color between rows and coluns")),inline(
+        pickerInput(inputId=ns("cor_sepcolor"),
+                    label = NULL,
+                    choices =   vals$colors_img$val[getsolid_col()],
+                    choicesOpt = list(content =   vals$colors_img$img[getsolid_col()]),
+                    selected="white",
+                    width="75px")
+      ))),
+      hr(),
+      pickerInput(ns("cor_cellnote"), span("+ Cell note",tiphelp("Show correlation value")),
+                  choices=cor_cellnote),
+      div(class="palette",
+          span(span("+ Note color:",tiphelp("Color of the correlation value")),inline(
+
+        pickerInput(inputId=ns("cor_noteco"),
+                    label = NULL,
+                    choices =   vals$colors_img$val[getsolid_col()],
+                    choicesOpt = list(content =   vals$colors_img$img[getsolid_col()]),
+                    selected="black",
+                    width="75px")
+      ))),
+      div(
+        span(span("+ Note size:", tiphelp("Size of the correlation value")),
+             inline(numericInput(ns("cor_notecex"),NULL,value = 1,step=0.1, width='100px')
+             ))
+      ),
+      div(
+        actionLink(ns('corr_downp'),"+ Download plot", style="button_active")
+      ),
+      div(
+        actionLink(ns('corr_down_results'),span("+ Download Results",icon("fas fa-table")), style="button_active")
+      )
+
+
+
+    )
+  })
+
+  observeEvent(input$corr_down_results,{
+    vals$hand_down<-"Corr result"
+    module_ui_downcenter("downcenter")
+    mod_downcenter <- callModule(module_server_downcenter, "downcenter",  vals=vals)
+
+  })
+  get_corrdata<-reactive({
+    req(input$cor_method)
+    req(input$cor_cutoff)
+    cordata<-cordata_filter(data=getdata_upload0(),cor_method=input$cor_method,cor_cutoff=input$cor_cutoff,cor_use=input$cor_use)
+    cordata
+
+  })
+
+  output$corr_plot<-renderUI({
+    cordata=get_corrdata()
+    vals$corr_results<-cordata
+
+    args<-list(cordata=cordata,
+               newcolhabs=vals$newcolhabs,
+               cor_palette=input$cor_palette,
+               cor_sepwidth_a=input$cor_sepwidth_a,
+               cor_sepwidth_b=input$cor_sepwidth_b,
+               cor_notecex=input$cor_notecex,
+               cor_noteco=input$cor_noteco,
+               cor_na.color=input$cor_na.color,
+               cor_sepcolor=input$cor_sepcolor,
+               cor_dendogram=input$cor_dendogram,
+               cor_scale=input$cor_scale,
+               cor_Rowv=input$cor_Rowv,
+               cor_Colv=input$cor_Colv,
+               cor_revC=input$cor_revC,
+               cor_na.rm=input$cor_na.rm,
+               cor_labRow=input$cor_labRow,
+               cor_labCol=input$cor_labCol,
+               cor_cellnote=input$cor_cellnote,
+               cor_density.info=input$cor_density.info)
+    req(!any(unlist(lapply(args,is.null))))
+    #saveRDS(args,"args.rds")
+    #args<-readRDS("args.rds")
+    renderPlot({
+     do.call(i_corplot,args)
+     vals$plot_correlation<-recordPlot()
+   })
+})
+
+
+  observeEvent(input$corr_downp,{
+    vals$hand_plot<-"Correlation Plot"
+    module_ui_figs("downfigs")
+    mod_downcenter<-callModule(module_server_figs, "downfigs",  vals=vals)
+
+  })
 
 
   getmissing<-reactive({
@@ -203,8 +369,6 @@ module_server_desctools<-function (input,output,session,vals,df_colors,newcolhab
 
 
   })
-
-
   get_dataord<-reactive({
     req(input$missing_reorder!="N missing")
     data=vals$saved_data[[input$data_upload0]]
@@ -419,48 +583,6 @@ observeEvent(input$save_teste,{
 
 
 
-output$side_corplot<-renderUI({
-  div(
-    div(pickerInput(ns("cor_method"), "+ Method", choices=c("pearson", "kendall",
-                                                            "spearman"))),
-    div(pickerInput(ns("corplot_type"), "+ plot type", choices=c("barplot", 'histogram'))),
-    div(class="palette",span("+ Palette:",inline(
-      pickerInput(inputId=ns("cor_palette"),
-                  label = NULL,
-                  choices = vals$colors_img$val,
-                  choicesOpt = list(content = vals$colors_img$img), width="120px", selected=vals$box_palette)
-    ))),
-    div(span("+ Shape:",
-             inline(pickerInput(inputId=ns("cor_pch"),
-                                label = NULL,
-                                choices = df_symbol$val,
-                                options=list(container="body"),
-                                choicesOpt = list(content = df_symbol$img), width='75px')))),
-    div(
-      span("+ Size (symb):",
-           inline(numericInput(ns("cor_cex_symb"),NULL,value = 1,min = 0.1,max = 3,step = .1, width='100px')
-           ))
-    ),
-    div(
-      span("+ Size (corr):",
-           inline(numericInput(ns("cor_cex_cor"),NULL,value = 1,min = 0.1,max = 3,step = .1, width='100px')
-           ))
-    ),
-    div(
-      span("+ Size (axes):",
-           inline(numericInput(ns("cor_cex_axes"),NULL,value = 1,min = 0.1,max = 3,step = .1, width='100px')
-           ))
-    ),
-    div(
-      span("+ Size (labels):",
-           inline(numericInput(ns("cor_cex_lab"),NULL,value = 1,min = 0.1,max = 3,step = .1, width='100px')
-           ))
-    ),
-    div(actionButton(ns("cor_go"),"RUN", style="button_active")),
-    uiOutput(ns("cor_downplot"))
-  )
-})
-
 output$cor_downplot<-renderUI({
   req(!is.null(vals$corplot))
   div(
@@ -472,25 +594,7 @@ observeEvent(input$data_upload0,{
   vals$corplot<-NULL
 })
 
-observeEvent(input$cor_go,{
-  output$corr_plot<-renderUI({
-    method=input$cor_method
-    palette=input$cor_palette
-    pch=input$cor_pch
-    cex.cor=input$cor_cex_cor
-    cex.axis=input$cor_cex_axes
-    cex.labels=input$cor_cex_lab
-    cex=input$cor_cex_symb
-    if(input$corplot_type=="barplot"){barplot=T} else{barplot=F}
-    if(input$corplot_type=="histogram"){histogram=T} else{histogram=F}
-    tab<-getdata_upload0()
-    renderPlot({
-      chart.Correl(tab, method=method, histogram=histogram,barplot=barplot,
-                   pch=as.numeric(pch), cex.cor=cex.cor, newcolhabs=vals$newcolhabs, palette=palette,cex=cex, cex.labels=cex.labels, cex.axis=cex.axis)
-      vals$corplot<-recordPlot()
-    })
-  })
-})
+
 observeEvent(input$cordown,{
 
   vals$hand_plot<-"Corr plot"
@@ -611,11 +715,18 @@ pic_pca_results<-reactive({
     mod_downcenter<-callModule(module_server_figs, "downfigs",  vals=vals)
 
   })
+  #vals<-readRDS("savepoint.rds")
+
+ # vals$saved_data$ID_tempo_GF2$Ano==
+  #vals$saved_data$ID_Variáveis_GF2$Ano
+
   output$scatter_plot<-renderUI({
     datax<-vals$saved_data[[input$scatter_x_datalist]]
-    datay<-vals$saved_data[[input$scatter_y_datalist]]
+   datay<-vals$saved_data[[input$scatter_y_datalist]]
+   dataxy<-data.frame(datax[input$scatter_x],datay[input$scatter_y])
+
     renderPlot({
-      plot(datax[,input$scatter_x],datay[,input$scatter_y], pch=as.numeric(input$scatter_symbol), cex=input$scatter_cexpoint, xlab=input$scatter_xlab, ylab=input$scatter_ylab)
+      plot(dataxy, pch=as.numeric(input$scatter_symbol), cex=input$scatter_cexpoint, xlab=input$scatter_xlab, ylab=input$scatter_ylab)
       vals$scatter_plot<-recordPlot()
     })
   })

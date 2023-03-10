@@ -17,6 +17,7 @@ module_server_downcenter <- function (input, output, session,vals ){
   ns <- session$ns
   getdown<-reactive({
     switch(vals$hand_down,
+           "Corr result"=data.frame(vals$corr_results),
 
            "Model Comparation (summary)"=data.frame(vals$getsummary_comp),
            "Model Comparation (pairwise table)"=data.frame(vals$getsummary_comp),

@@ -1,4 +1,93 @@
 
+cordata_filter<-function(data,cor_method="pearson",cor_cutoff=0.75,cor_use='everything'){
+  met<-match.arg(cor_method,c("pearson", "kendall", "spearman"))
+
+  pic<-which(apply(data,2,function(x) var(x,na.rm=T))==0)
+  if(length(pic)>0){
+    datatemp<-data
+    #datatemp[is.na(datatemp)]<-0
+    datatemp[colnames(data)[pic]]<-NULL
+    data<-datatemp
+  }
+
+
+  if(cor_cutoff==1){
+    cordata<-cor(data, use=cor_use,method =met)
+    return(cordata)
+  }
+
+  cordata<-cor(data, use=cor_use,method =met)
+  tmp <- cordata
+  tmp[upper.tri(tmp)] <- 0
+  diag(tmp) <- 0
+  data.new<-data[,-which(colnames(data)%in%unique(rownames(which(abs(tmp)>cor_cutoff,arr.ind = T))))]
+  cordata<-cor(data.new, use=cor_use,method =met)
+  cordata
+
+}
+i_corplot<-function(cordata,newcolhabs,cor_palette,cor_sepwidth_a,
+                    cor_sepwidth_b,cor_notecex,cor_noteco,cor_na.color,
+                    cor_sepcolor,cor_dendogram,
+                    cor_scale,cor_Rowv,cor_Colv,cor_revC,
+                    cor_na.rm,cor_labRow,cor_labCol,cor_cellnote,cor_density.info) {
+  sepwidth=c(cor_sepwidth_a,cor_sepwidth_b)
+
+  hmet=match.arg(cor_hclust_method,c('ward.D','ward.D2','single','complete','average','mcquitty','median','centroid'))
+  hdist<-match.arg(cor_distance,c('euclidean','bray','jaccard','hellinger'))
+  dend<-match.arg(cor_dendogram,c("both","row","column","none"))
+  sca_de<-match.arg(cor_scale,c("none","row", "column"))
+  Rowv<-as.logical(match.arg(cor_Rowv,c('TRUE','FALSE')))
+  Colv<-match.arg(cor_Colv,c('Rowv',T,F))
+  revC<-as.logical(match.arg(cor_revC,c('TRUE','FALSE')))
+  na.rm<-as.logical(match.arg(cor_na.rm,c('TRUE','FALSE')))
+
+  labRow<-as.logical(match.arg(cor_labRow,c('TRUE','FALSE')))
+  labCol<-as.logical(match.arg(cor_labCol,c('TRUE','FALSE')))
+
+  labRow<-if(isTRUE(labRow)){
+    labRow<-NULL
+  } else{
+    labRow<-NA
+  }
+  labCol<-if(isTRUE(labCol)){
+    labCol<-NULL
+  } else{
+    labCol<-NA
+  }
+  cellnote<-as.logical(match.arg(cor_cellnote,c('TRUE','FALSE')))
+
+  if(isTRUE(cellnote)){
+    cellnote<-round(cordata,2)
+  } else{
+    cellnote<-matrix(rep("",length(cordata)), nrow(cordata), ncol(cordata))
+  }
+
+
+  #x11()
+
+
+  ncex=cor_notecex*20/nrow(cordata)
+  heatmap.2(cordata,
+            Rowv=Rowv,
+            Colv=Colv,
+            na.rm=na.rm,
+            revC=revC,
+            dendrogram = dend,
+            col=newcolhabs[[cor_palette]],
+            labRow=labRow,
+            labCol=labCol,
+            sepcolor=cor_sepcolor,
+            sepwidth=sepwidth,
+            cellnote=cellnote,
+            notecex=ncex,
+            notecol=cor_noteco,
+            na.color=cor_na.color,trace='none',
+            density.info=cor_density.info,
+            key.title = "Correlation",
+            denscol = "black",
+            linecol = "black")
+
+}
 
 i_alone_scores<-function(newdata,obc,reps,modelist,weis,accu, scale,en_method,top.features, root=NULL, inter_method,progress=T, ms=NULL,type="modelist", feaimp=F, error=F){
   m<-modelist[[1]]

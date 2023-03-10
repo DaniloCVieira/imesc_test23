@@ -29,6 +29,7 @@ module_server_figs <- function (input, output, session,vals ){
 
     switch (
       vals$hand_plot,
+      'Correlation Plot'=replayPlot(vals$plot_correlation),
       'Missing plot'=plot(vals$missing_plot),
       'Scatter plot'=replayPlot(vals$scatter_plot),
       'Corr plot'=replayPlot(vals$corplot),
@@ -116,6 +117,7 @@ module_server_figs <- function (input, output, session,vals ){
     png(paste0(vals$hand_plot,".png",sep=""), height=fheight, width=fwidth, res=fres, units="cm", pointsize = input$pointsize)
     switch(
       vals$hand_plot,
+      'Correlation Plot'=replayPlot(vals$plot_correlation),
       'Missing plot'=plot(vals$missing_plot),
       'Scatter plot'=replayPlot(vals$scatter_plot),
       'Corr plot'=replayPlot(vals$corplot),

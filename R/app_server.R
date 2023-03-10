@@ -7296,7 +7296,8 @@ output$del_datalist_choices<-renderUser({
       pct_prev=input$pct_prev,
       raresing=input$raresing,
       obs_match=input$obs_match,
-      obs_match_datalist=input$obs_match_datalist
+      obs_match_datalist=input$obs_match_datalist,
+      cor_filter=get_corrdata()
 
 
     )
@@ -7377,9 +7378,7 @@ output$del_datalist_choices<-renderUser({
   )
 
 
-  observeEvent(input$load_savepoint,{
-    # saveRDS(input$load_savepoint$datapath,"mybooks.rds")
-  })
+
   observeEvent(input$bank_button, {
     showModal(insert_modal())
     insert_rv$page<-1
@@ -9153,8 +9152,7 @@ output$del_datalist_choices<-renderUser({
     attr(p,"my_rst")<-my_rst
     attr(p,"data_z")<-attr(p0,"data_z")
 
-    # path<-'D:/OneDrive/PÓS-DOC/Articles/MS_meiofauna/Figuras_MS_Fabi/Rasters/'
-    #saveRDS(my_rst,paste0(path,get,".rds"))
+
     vals$map_res<-p
 
   })
@@ -10615,12 +10613,7 @@ output$del_datalist_choices<-renderUser({
 
   })
   observeEvent(input$mapcode_loop_go,{
-   # saveRDS(reactiveValuesToList(vals),"vals.rds")
-   # saveRDS(reactiveValuesToList(input),"input.rds")
-   # vals<-readRDS("vals.rds")
-   # input<-readRDS("input.rds")
-    #mnew<-m
-   # beep()
+
     vals$mapcode_loop_res<-NULL
     m<-mnew<-getmodel_hc()
     newdata=vals$saved_data[[input$data_mapcode_tab6]]
@@ -12110,11 +12103,86 @@ req(input$model_or_data=='som codebook')
 
     div(id="tool2",class="tools_content",
 
-        splitLayout(
+        div(splitLayout(
           uiOutput("remove_sp"),
           uiOutput("filterby_indvars")
-        ))
+        )),
+        div(uiOutput("filter_cor"),
+
+            #uiOutput("filter_teste")
+            ))
   })
+
+  observeEvent(input$cor_cutoff,{
+    vals$cor_cutoff<-input$cor_cutoff
+  })
+
+  observeEvent(input$cor_use,{
+    vals$cor_use<-input$cor_use
+  })
+
+  output$filter_cor<-renderUI({
+    if(is.null(vals$cor_cutoff)){
+      vals$cor_cutoff<-1
+    }
+    cor_method = c("pearson", "kendall", "spearman")
+    cor_use=c( "complete.obs","everything", "all.obs", "na.or.complete", "pairwise.complete.obs")
+    div(style="margin-top:10px; ",
+        div(style="margin-top: 10px;",span("Correlation-based remotion",tipify(icon(verify_fa = FALSE,name=NULL,class="fas fa-question-circle"), "Check to select a filter"))
+        ),
+        div(
+
+          class="cogs_in",style=" height: 180px",
+          div(class="map_control_style",
+
+            div(pickerInput("cor_method", span("+ Corr method",tiphelp("correlation coefficient to be computed")),choices=cor_method, selected=vals$cor_method)),
+            div(
+              span("+ Cutoff",
+                   inline(numericInput("cor_cutoff",NULL,value = vals$cor_cutoff,min = 0.1,max = 1,step = .1, width='100px')
+                   ))),
+            div(pickerInput("cor_use", span("+ Use",tiphelp("method for computing covariances in the presence of missing values")),
+                            choices=cor_use, selected=vals$cor_use)),
+            div(style="margin-top: 50px",
+              icon(verify_fa = FALSE,name=NULL,class="fas fa-lightbulb"),"Explore the correlation plot in the Descriptive tools menu"
+            )
+
+          )
+        )
+
+    )
+  })
+
+  output$filter_teste<-renderUI({
+    renderPrint({
+      get_corrdata()
+    })
+  })
+  get_corrdata<-reactive({
+    cordata<-NULL
+    if(length(input$cor_cutoff)>0){
+      req(is.numeric(input$cor_cutoff))
+      if(input$cor_cutoff<1){
+        data<-vals$saved_data[[input$data_upload]]
+        req(nrow(data)>1)
+        req(ncol(data)>1)
+        cordata<-try({
+          cordata_filter(data=data,cor_method=input$cor_method,cor_cutoff=input$cor_cutoff,cor_use=input$cor_use)
+        })
+        if("try-error" %in% class(cordata)){
+          cordata<-NULL
+        } else{
+          if(length(colnames(cordata))<0){
+            cordata<-NULL
+          }
+          cordata<-colnames(cordata)
+        }
+
+      }
+    }
+
+    cordata
+  })
+
   output$tool4<-renderUI({
 
     div(
@@ -12440,13 +12508,15 @@ req(input$model_or_data=='som codebook')
       input$tag_edit,
       input$rank_list_2,
       input$obs_match,
-      input$obs_match_datalist
+      input$obs_match_datalist,
+      get_corrdata()
     )
   })
   data.rares<-reactive({
     req(length(vals$saved_data)>0)
     req(vals$cur_data%in%names(vals$saved_data))
-    data<-data.rares_fun(
+    args<-list(
+
       saved_data=vals$saved_data,
       cur_data=vals$cur_data,
       filter_data=input$filter_data,
@@ -12465,9 +12535,12 @@ req(input$model_or_data=='som codebook')
       pct_prev=input$pct_prev,
       raresing=input$raresing,
       obs_match=input$obs_match,
-      obs_match_datalist=input$obs_match_datalist
+      obs_match_datalist=input$obs_match_datalist,
+      cor_filter=get_corrdata()
 
     )
+
+    data<-do.call(data.rares_fun,args)
     data
   })
 
@@ -12509,8 +12582,7 @@ req(input$model_or_data=='som codebook')
     req(vals$cur_data)
     data<- data.rares()
     factors<-attr(data,"factors")
-
-
+    #if(!is.null(get_corrdata())){data<- data[get_corrdata()]    }
     data_cogs$df<-data
   })
 
