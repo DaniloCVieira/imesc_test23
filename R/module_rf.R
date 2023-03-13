@@ -1762,10 +1762,17 @@ req(input$rf_useinter)
     )
   })
 output$saved_rfs<-renderUI({
+
   req(input$data_rfX)
-  req(length(names(attr(vals$saved_data[[input$data_rfX]],"rf")))>0)
+  names_rf<-names(attr(vals$saved_data[[input$data_rfX]],"rf"))
+  req(length(names_rf)>0)
+  pic<-which(names_rf%in%"new rf (unsaved)")
+  if(length(pic)>0){
+    names_rf<-names_rf[-pic]
+  }
+  req(length(names_rf)>0)
   div(class="saved_models",
-    icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names(attr(vals$saved_data[[input$data_rfX]],"rf")))), "saved model(s)")
+      icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names_rf)), "saved model(s)")
 })
 
   observeEvent(input$data_rfX,{

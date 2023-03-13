@@ -651,10 +651,17 @@ module_server_sgboost <- function (input, output, session,vals,df_colors,newcolh
   })
 
   output$saved_sgboosts<-renderUI({
+
     req(input$data_sgboostX)
-    req(length(names(attr(vals$saved_data[[input$data_sgboostX]],"sgboost")))>0)
+    names_sgboost<-names(attr(vals$saved_data[[input$data_sgboostX]],"sgboost"))
+    req(length(names_sgboost)>0)
+    pic<-which(names_sgboost%in%"new sgboost (unsaved)")
+    if(length(pic)>0){
+      names_sgboost<-names_sgboost[-pic]
+    }
+    req(length(names_sgboost)>0)
     div(class="saved_models",
-        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names(attr(vals$saved_data[[input$data_sgboostX]],"sgboost")))), "saved model(s)")
+        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names_sgboost)), "saved model(s)")
   })
 
   output$sgboost_params<- renderUI({

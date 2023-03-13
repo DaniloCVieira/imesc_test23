@@ -1179,10 +1179,17 @@ pred_test_nb<-reactive({
 
 
   output$saved_nbs<-renderUI({
+
     req(input$data_nbX)
-    req(length(names(attr(vals$saved_data[[input$data_nbX]],"nb")))>0)
+    names_nb<-names(attr(vals$saved_data[[input$data_nbX]],"nb"))
+    req(length(names_nb)>0)
+    pic<-which(names_nb%in%"new nb (unsaved)")
+    if(length(pic)>0){
+      names_nb<-names_nb[-pic]
+    }
+    req(length(names_nb)>0)
     div(class="saved_models",
-        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names(attr(vals$saved_data[[input$data_nbX]],"nb")))), "saved model(s)")
+        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names_nb)), "saved model(s)")
   })
 
 

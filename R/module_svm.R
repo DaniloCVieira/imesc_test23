@@ -782,10 +782,17 @@ module_server_svm <- function (input, output, session,vals,df_colors,newcolhabs 
   })
 
   output$saved_svms<-renderUI({
+
     req(input$data_svmX)
-    req(length(names(attr(vals$saved_data[[input$data_svmX]],"svm")))>0)
+    names_svm<-names(attr(vals$saved_data[[input$data_svmX]],"svm"))
+    req(length(names_svm)>0)
+    pic<-which(names_svm%in%"new svm (unsaved)")
+    if(length(pic)>0){
+      names_svm<-names_svm[-pic]
+    }
+    req(length(names_svm)>0)
     div(class="saved_models",
-        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names(attr(vals$saved_data[[input$data_svmX]],"svm")))), "saved model(s)")
+        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names_svm)), "saved model(s)")
   })
 
   output$svm_params<- renderUI({

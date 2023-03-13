@@ -1005,11 +1005,39 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
 
     )
   })
+
+  savereac<-reactive({
+
+
+
+    tosave<-isolate(reactiveValuesToList(vals))
+    tosave<-tosave[-which(names(vals)%in%c("saved_data","newcolhabs",'colors_img'))]
+    tosave<-tosave[-which(unlist(lapply(tosave,function(x) object.size(x)))>1000)]
+    tosave$saved_data<-vals$saved_data
+    tosave$newcolhabs<-vals$newcolhabs
+    tosave$colors_img<-vals$colors_img
+
+    saveRDS(tosave,"savepoint.rds")
+    saveRDS(reactiveValuesToList(input),"input.rds")
+    beep()
+    #vals<-readRDS("vals.rds")
+    #input<-readRDS('input.rds')
+
+  })
+ #input<- readRDS('input.rds')
+  #vals<-readRDS('savepoint.rds')
   output$saved_soms<-renderUI({
+
     req(input$data_som)
-    req(length(names(attr(vals$saved_data[[input$data_som]],"som")))>0)
+    names_som<-names(attr(vals$saved_data[[input$data_som]],"som"))
+    req(length(names_som)>0)
+    pic<-which(names_som%in%"new som (unsaved)")
+    if(length(pic)>0){
+      names_som<-names_som[-pic]
+    }
+    req(length(names_som)>0)
     div(class="saved_models",
-        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names(attr(vals$saved_data[[input$data_som]],"som")))), "saved model(s)")
+        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names_som)), "saved model(s)")
   })
 
   output$som_y<-renderUI({
@@ -2289,7 +2317,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
 
 
 
-  observeEvent( vals$som_unsaved, {
+  observeEvent(input$trainSOM, {
     vals$cur_train<-"new som (unsaved)"
     updateTabsetPanel(session, "som_tab", "som_tab2")
     updateTabsetPanel(session, "som_tab", "train_tab2")
@@ -2433,6 +2461,14 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   paste("som",(NULL+1))
   bag_somname<-reactive({
 
+
+    paste0("SOM (",length((attr(vals$saved_data[[input$data_som]],"som"))),")")
+  })
+
+  bag_somname_obd<-reactive({
+
+
+
     soms<-names(attr(vals$saved_data[[input$data_som]],"som"))
     if(is.null(soms)){
       bag=1
@@ -2515,7 +2551,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     data_overwritte$df<-F
     choices<-c(names(vals$saved_data))
     req(input$hand_save=="over")
-    if(vals$hand_save=='Save RF model in'){choices<-names(attr(vals$saved_data[[input$data_rfX]],'rf'))}
+    if(vals$hand_save=='Save new som in'){choices<-names(attr(vals$saved_data[[input$data_som]],'som'))}
     res<-pickerInput(ns("over_datalist"), NULL,choices, width="350px")
     data_overwritte$df<-T
     inline(res)
@@ -2630,6 +2666,8 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
                       selected=cur)
     delay(500,{updateTabsetPanel(session, "som_tab", curtab)
       updateTabsetPanel(session, "som_res", vals$som_res)})
+
+    attr(vals$saved_data[[input$data_som]],"som")[['new som (unsaved)']]<-NULL
 
   })
 

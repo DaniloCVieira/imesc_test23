@@ -656,10 +656,17 @@ module_server_knn <- function (input, output, session,vals,df_colors,newcolhabs 
   })
 
   output$saved_knns<-renderUI({
+
     req(input$data_knnX)
-    req(length(names(attr(vals$saved_data[[input$data_knnX]],"knn")))>0)
+    names_knn<-names(attr(vals$saved_data[[input$data_knnX]],"knn"))
+    req(length(names_knn)>0)
+    pic<-which(names_knn%in%"new knn (unsaved)")
+    if(length(pic)>0){
+      names_knn<-names_knn[-pic]
+    }
+    req(length(names_knn)>0)
     div(class="saved_models",
-        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names(attr(vals$saved_data[[input$data_knnX]],"knn")))), "saved model(s)")
+        icon(verify_fa = FALSE,name=NULL,class="fas fa-hand-point-left"),"-",strong(length(names_knn)), "saved model(s)")
   })
 
   output$knn_params<- renderUI({
