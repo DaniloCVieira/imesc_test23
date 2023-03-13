@@ -32,8 +32,8 @@ i_corplot<-function(cordata,newcolhabs,cor_palette,cor_sepwidth_a,
                     cor_na.rm,cor_labRow,cor_labCol,cor_cellnote,cor_density.info) {
   sepwidth=c(cor_sepwidth_a,cor_sepwidth_b)
 
-  hmet=match.arg(cor_hclust_method,c('ward.D','ward.D2','single','complete','average','mcquitty','median','centroid'))
-  hdist<-match.arg(cor_distance,c('euclidean','bray','jaccard','hellinger'))
+ # hmet=match.arg(cor_hclust_method,c('ward.D','ward.D2','single','complete','average','mcquitty','median','centroid'))
+ # hdist<-match.arg(cor_distance,c('euclidean','bray','jaccard','hellinger'))
   dend<-match.arg(cor_dendogram,c("both","row","column","none"))
   sca_de<-match.arg(cor_scale,c("none","row", "column"))
   Rowv<-as.logical(match.arg(cor_Rowv,c('TRUE','FALSE')))
