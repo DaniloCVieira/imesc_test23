@@ -399,6 +399,7 @@ app_server <- function(input, output, session) {
              uiOutput("automap")
       )
       ,
+      #column(12,uiOutput("map_teste")),
 
       uiOutput("map_part2")
 
@@ -1260,8 +1261,9 @@ app_server <- function(input, output, session) {
 
 
   })
-  sidebarPanel()
+
   output$side_map00<-renderUI({
+
     req(input$saved_maps=="new map"|isTRUE(input$surface_map)|isTRUE(input$mantel_map)|isTRUE(input$edit_map))
     column(4,id="sidebar_map",class="well2", style="margin-bottom: 150px",
 
@@ -1279,6 +1281,7 @@ app_server <- function(input, output, session) {
                uiOutput("map_00_palette")),
              uiOutput("map_side01"),
              uiOutput("map_side02"),
+             div(style="margin-top: 5px",uiOutput("map_title_out")),
              uiOutput('map_axes'),
              uiOutput("map_side04"),
              uiOutput("map_side05")
@@ -2016,6 +2019,7 @@ app_server <- function(input, output, session) {
     vals$scabartextsize<-input$scabartextsize
   })
   output$show_map_axes<-renderUI({
+    req(input$var_map)
     req(input$var_map_filter1)
     #req(!isTRUE(input$surface_map))
     if(is.null(vals$cex.key)){vals$cex.key<-12}
@@ -2035,12 +2039,12 @@ app_server <- function(input, output, session) {
                     '+ Size:',
                     inline(numericInput("pt_legend",NULL, vals$pt_legend, width="100px"))
              )),
-      column(12,' +	Title:',
-             inline(textInput("map_title",NULL,paste0(input$var_map,if(input$var_map_filter1!="None"){paste("-",input$var_map_filter1,input$var_map_filter2)}), placeholder = "Title", width="150px")),
-             column(12,
-                    '+ Title size:',
-                    inline(numericInput("pt_titlemap",NULL, vals$pt_titlemap,width="100px"))
-             )),
+
+      column(12, column(12,
+                        '+ Title size:',
+                        inline(numericInput("pt_titlemap",NULL, vals$pt_titlemap,width="100px"))
+      )),
+
       column(12,' +	Legend:',
              div(style="padding-left: 15px",
                column(12,
@@ -2071,6 +2075,36 @@ app_server <- function(input, output, session) {
                column(12,uiOutput("breaks_map"))
              ))
     )
+  })
+
+
+  getmap_title<-reactive({
+    req(input$var_map)
+    req(input$var_map_filter1)
+    res<-paste0(input$var_map,if(input$var_map_filter1!="None"){
+      req(input$var_map_filter2)
+      paste("-",input$var_map_filter1,input$var_map_filter2)
+    })
+    res
+  })
+
+  output$map_title_out<-renderUI({
+    vals$map_title<-NULL
+    title<-getmap_title()
+    column(12,' +	Title:',
+           inline(textInput("map_title",NULL, title, placeholder = "Title", width="150px"))
+          )
+  })
+
+  observeEvent(input$var_map_filter2,{
+    vals$map_title<-NULL
+  })
+  observeEvent(input$var_map_filter1,{
+    vals$map_title<-NULL
+  })
+
+  observeEvent(input$map_title,{
+    vals$map_title<-input$map_title
   })
 
   observeEvent(input$var_map,{
@@ -2503,8 +2537,8 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
       inline(div(style="margin-top:10px",uiOutput("stack_map", inline=T))),
       inline(div(style="margin-top:10px",uiOutput("trash_map", inline=T))),
       bsButton('downp_map',tipify(icon(verify_fa = FALSE,name=NULL,class="fas fa-download"),"Download plot"), style="button_active"),
-      actionLink('down_disc_loop',"*download loop", style="button_active"),
-      inline(uiOutput("down_raster_btn")),
+     # actionLink('down_disc_loop',"*download loop", style="button_active"),
+      #inline(uiOutput("down_raster_btn")),
       inline(div(style="margin-top:10px",uiOutput("stop_map", inline=T))),
 
     )
@@ -2743,6 +2777,103 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
       if(isFALSE(vals$stopmap)){map_fac_disc()}}
 
   })
+
+  map_fac_disc<-reactive({
+    args<-map_factor_args()
+
+
+    m<-do.call(map_discrete_variable,args)
+    attr(m,"args")<-l1()
+    vals$map_res<-m
+  })
+  map_factor_args<-reactive({
+    req(input$var_map)
+    req(vals$vars_fac%in%input$var_map)
+    get<-vals$vars_fac[which(vals$vars_fac==input$var_map)]
+    data <- attr(getdata_map(),"factors")[filtermap(),,drop=F]
+    req(nrow(data)>0)
+
+    req(input$pt_legend)
+    req(input$map_title)
+    req(!is.null(vals$map_title))
+    req(input$pt_titlemap)
+    req(input$map_legend)
+    req(input$cex.key)
+    req(input$key.height)
+    req(input$keyscale)
+    req(input$scabarsize)
+    req(input$scabartextsize)
+    # req(input$breaks_map)
+    #mybreaks<-as.numeric(unlist(strsplit(input$breaks_map,",")))
+    # req(length(mybreaks))>0
+    req(input$pt_points)
+    req(input$long_xmin)
+    req(input$long_xmax)
+    req(input$lat_xmin)
+    req(input$lat_xmax)
+
+    req(input$map_legend)
+
+    coords<-attr(getdata_map(),"coords")[rownames(data),]
+    req(get%in%colnames(data))
+    pizza_fac<-NULL
+    if(isTRUE(input$pizza_map)){
+      req(input$pizza_fac)
+      factors<-attr(vals$saved_data[[input$data_map]],"factors")
+      pizza_fac<-factors[filtermap(),input$pizza_fac]
+    }
+    colored_by_factor=attr(getdata_map(),"factors")[as.character(input$var_map)][filtermap(),, drop=F]
+
+    args<-list(
+      data = data,
+      coords = coords,
+      base_shape =if(isTRUE(input$map_1a_base)){attr(getdata_map(),"base_shape") } else { NULL},
+      layer_shape =if(isTRUE(input$map_1f_layer)){attr(getdata_map(),"layer_shape") } else { NULL},
+      get = get,
+      main = input$map_title,
+      factors=labcoords(),
+      showcoords=input$showcoords,
+      cex.pt = input$pt_points+6,
+      cexmin.pt=input$pt_points_min,
+      cex.coords=input$pt_coords+1,
+      cex.fac=input$pt_factor+2,
+      col.fac=input$col_factor,
+      cex.axes=input$pt_legend,
+      cex.lab=input$pt_legend,
+      cex.leg=input$cex.key,
+      leg=input$map_legend,
+      col.coords=if(length(input$col_coords)>0){   getcolhabs(vals$newcolhabs,input$col_coords,5)[1] } else{ NULL},
+      col.palette=input$pt_palette,
+      symbol=as.numeric(input$pt_symbol),
+      scalesize_size= F,
+      scalesize_color=F,
+      points=T,
+
+      as_factor=F,
+      bmu=F,
+      colored_by_factor=colored_by_factor,
+      showguides=input$showguides,
+      limits=as.matrix( cbind(
+        c(input$long_xmin,  input$lat_xmin),
+        c(input$long_xmax,  input$lat_xmax)
+      )),
+      layer_col=getcolhabs(vals$newcolhabs,input$layer_col,1),
+      lighten=input$layer_lighten,
+      base_col=getcolhabs(vals$newcolhabs,input$base_col,1),
+      base_lighten=input$base_lighten,
+      newcolhabs=vals$newcolhabs,
+      extralayers=extralayers(),
+      data_depth=input$data_depth,
+      layer_shape_border=getcolhabs(vals$newcolhabs,input$layer_col_border,1),
+      base_shape_border= getcolhabs(vals$newcolhabs,input$base_col_border,1),
+      cex.main=input$pt_titlemap,
+      key.height=input$key.height,
+      keyscale=input$keyscale,  width_hint=input$scabarsize,cex_scabar=input$scabartextsize,
+      pie=input$pizza_map,
+      facpizza=pizza_fac
+    )
+    args
+  })
   interp_fac_map<-reactive({
     if(isTRUE(input$automap)|isTRUE(vals$gomap)){
       if(isFALSE(vals$stopmap)){map_fac_interp()}}
@@ -2809,21 +2940,28 @@ tipify(span('Breakpoints'), "The break points computed", placement = "right")
 
   })
 
+  observe({
+    req(input$choices_map)
+    req(input$cmap)
+    req(input$var_map_filter1)
+    if(input$var_map_filter1!="None"){
+      req(input$var_map_filter2)
+    }
+    if(input$choices_map=="Numeric-Attribute"){
+      if(input$cmap=='discrete'){try(disc_data_map(), silent=T)} else if(input$cmap=='interpolation'){try(interp_data_map(), silent = T)} else if(input$cmap=='raster'){try(raster_map(), silent=T)}
+    } else  if(input$choices_map=='Factor-Attribute'){
+      if(input$cmap=='discrete'){try(disc_fac_map(), silent=T)} else if(input$cmap=='interpolation'){try(interp_fac_map(), silent=T)}
+    }
+    if(length(input$stack_map)>0){
+      if(isTRUE(input$stack_map)){stack_map()}
+    }
+
+  })
+
    output$map_out<-renderUI({
     req(input$choices_map)
     req(input$cmap)
 
-
-    if(input$choices_map=="Numeric-Attribute"){
-      if(input$cmap=='discrete'){try(disc_data_map(), silent=T)}
-      if(input$cmap=='interpolation'){try(interp_data_map(), silent = T)}
-      if(input$cmap=='raster'){try(raster_map(), silent=T)}
-    }
-    if(input$choices_map=='Factor-Attribute'){
-      if(input$cmap=='discrete'){try(disc_fac_map(), silent=T)}
-      if(input$cmap=='interpolation'){try(interp_fac_map(), silent=T)}
-    }
-    if(isTRUE(input$stack_map)){stack_map()}
 
 
     if(input$cmap=='raster'){
@@ -3306,6 +3444,7 @@ if(is.null(menu_steps$anext)&is.null(menu_steps$prev)){
     pic<-rownames(data)
     if(length(input$var_map_filter1)>0){
       if(input$var_map_filter1!="None"){
+        req(input$var_map_filter2)
         factors<-attr(data,"factors")
         filtro <- as.character(input$var_map_filter1)
         filtro2 <- as.character(input$var_map_filter2)
@@ -8706,16 +8845,30 @@ output$del_datalist_choices<-renderUser({
       }
     }
   })
-  map_data_disc <- reactive({
-    #req(isFALSE(stopmap$df))
+
+
+
+  getmap_scale<-reactive({
+    list( scalesize_size= scalesize_size(),
+          scalesize_color=scalesize_color())
+  })
+
+  map_data_disc_args<-reactive({
     req(input$long_xmin)
     req(input$lat_xmin)
     req(input$long_xmax)
     req(input$lat_xmax)
+    req(!is.null(vals$map_title))
     get<-vals$vars_data[which(vals$vars_data==input$var_map)]
     data<-getdata_map()
     coords<-attr(data,'coords')
     data <- data[filtermap(),,drop=F]
+    req(nrow(data)>0)
+    mapscale<-getmap_scale()
+    scalesize_size=mapscale$scalesize_size
+    scalesize_color=mapscale$scalesize_color
+    req(isTRUE(scalesize_size)|isFALSE(scalesize_size))
+    req(isTRUE(scalesize_color)|isFALSE(scalesize_color))
     req(get%in%colnames(data))
 
     data_go<-na.omit(data[,get,drop=F])
@@ -8731,8 +8884,8 @@ output$del_datalist_choices<-renderUser({
     if(!isTRUE(input$stack_scatter_3d)){
       mybreaks<-as.numeric(unlist(strsplit(input$breaks_map,",")))
     }else{
-        mybreaks<-NULL
-      }
+      mybreaks<-NULL
+    }
 
     pizza_fac<-NULL
     if(isTRUE(input$pizza_map)){
@@ -8767,8 +8920,8 @@ output$del_datalist_choices<-renderUser({
         col.coords=if(length(input$col_coords)>0){   getcolhabs(vals$newcolhabs,input$col_coords,1) } else{ NULL},
         col.palette=input$pt_palette,
         symbol=as.numeric(input$pt_symbol),
-        scalesize_size= scalesize_size(),
-        scalesize_color=scalesize_color(),
+        scalesize_size= scalesize_size,
+        scalesize_color=scalesize_color,
         points=T,
         as_factor=F,
         bmu=F,
@@ -8798,8 +8951,23 @@ output$del_datalist_choices<-renderUser({
         facpizza=pizza_fac
 
       )
+    args
+  })
 
 
+ # args<-readRDS("args.rds")
+  map_data_disc <- reactive({
+    #req(isFALSE(stopmap$df))
+
+    args<-map_data_disc_args()
+
+    #name0<-"args"
+    #files<-list.files()
+    #newnames<-make.unique(c(gsub(".rds","",files[grep("args",files)]),name0),"")
+    #filename<-paste0(newnames[length(newnames)],".rds")
+   # saveRDS(args,filename)
+
+#attach(args)
     m<-do.call(map_discrete_variable,args)
     attr(m,"args")<-l1()
     vals$map_res<-m
@@ -8840,89 +9008,12 @@ output$del_datalist_choices<-renderUser({
 
     extralayers
   })
-  map_fac_disc<-reactive({
-
-    get<-vals$vars_fac[which(vals$vars_fac==input$var_map)]
-    col=input$pt_palette
-    data <- attr(getdata_map(),"factors")[filtermap(),,drop=F]
-    coords<-attr(getdata_map(),"coords")[rownames(data),]
-    req(get%in%colnames(data))
-    pizza_fac<-NULL
-    if(isTRUE(input$pizza_map)){
-      factors<-attr(vals$saved_data[[input$data_map]],"factors")
-      pizza_fac<-factors[filtermap(),input$pizza_fac]
-    }
-
-    args<-list(
-
-      data = data,
-      coords = coords,
-      base_shape =if(isTRUE(input$map_1a_base)){attr(getdata_map(),"base_shape") } else { NULL},
-      layer_shape =if(isTRUE(input$map_1f_layer)){attr(getdata_map(),"layer_shape") } else { NULL},
-      get = get,
-      main = input$map_title,
-      factors=labcoords(),
-      showcoords=input$showcoords,
-      cex.pt = input$pt_points+6,
-      cexmin.pt=input$pt_points_min,
-      cex.coords=input$pt_coords+1,
-      cex.fac=input$pt_factor+2,
-      col.fac=input$col_factor,
-      cex.axes=input$pt_legend,
-      cex.lab=input$pt_legend,
-      cex.leg=input$cex.key,
-      leg=input$map_legend,
-      col.coords=if(length(input$col_coords)>0){   getcolhabs(vals$newcolhabs,input$col_coords,5)[1] } else{ NULL},
-      col.palette=col,
-      symbol=as.numeric(input$pt_symbol),
-      scalesize_size= F,
-      scalesize_color=F,
-      points=T,
-
-      as_factor=F,
-      bmu=F,
-      colored_by_factor=attr(getdata_map(),"factors")[as.character(input$var_map)][filtermap(),, drop=F],
-      showguides=input$showguides,
-      limits=as.matrix( cbind(
-        c(input$long_xmin,  input$lat_xmin),
-        c(input$long_xmax,  input$lat_xmax)
-      )),
-      layer_col=getcolhabs(vals$newcolhabs,input$layer_col,1),
-      lighten=input$layer_lighten,
-      base_col=getcolhabs(vals$newcolhabs,input$base_col,1),
-      base_lighten=input$base_lighten,
-      newcolhabs=vals$newcolhabs,
-      extralayers=extralayers(),
-      data_depth=input$data_depth,
-      layer_shape_border=getcolhabs(vals$newcolhabs,input$layer_col_border,1),
-      base_shape_border= getcolhabs(vals$newcolhabs,input$base_col_border,1),
-      cex.main=input$pt_titlemap,
-      key.height=input$key.height,
-      keyscale=input$keyscale,  width_hint=input$scabarsize,cex_scabar=input$scabartextsize,
-      pie=input$pizza_map,
-      facpizza=pizza_fac
-
-    )
-
-    #args<-readRDS('args.rds')
-#attach(args)
-   # saveRDS(args,"args.rds")
-    #beep()
-
-    #args<-readRDS('args.rds')
-
-
-    m<-suppressWarnings(
-      do.call(map_discrete_variable,args)
-
-    )
 
 
 
-    attr(m,"args")<-l1()
-    vals$map_res<-m
 
-  })
+
+
   labcoords<-reactive({
     labcoords<-if(!isTRUE(input$showfactors)){NULL} else{
       attr(getdata_map(),"factors")[filtermap(),as.character(input$labels_coords)]
@@ -14010,7 +14101,7 @@ observeEvent(input$radio_cogs,{
   output$quick_save<-renderUI({
 
     div(id="qsave_btns",
-        inline(uiOutput("qsave_btn")),
+        #inline(uiOutput("qsave_btn")),
         #inline(uiOutput("qload_btn")),
         inline(uiOutput("qcomment_btn")),
         bsTooltip('flashsave', "Creates savepoint file in your working directory", 'top'),

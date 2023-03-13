@@ -919,11 +919,8 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     if(is.null(vals$cur_train)){vals$cur_train<-"new som (unsaved)"}
     req(input$data_som)
     req(input$som_tab=="som_tab2"|input$som_tab=="som_tab3")
-    choices<-if(isTRUE(vals$bagmodel)){
-      c("new som (unsaved)", names(attr(vals$saved_data[[input$data_som]],"som")))
-    } else{
-      names(attr(vals$saved_data[[input$data_som]],"som"))
-    }
+    choices<-names(attr(vals$saved_data[[input$data_som]],"som"))
+
     div(
       div(
         div(strong("Som results:", tiphelp("SOM results. Click to see SOM results saved in the selected Datalist"))),
@@ -2121,11 +2118,7 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   observeEvent(input$som_part,{
     updateTabsetPanel(session,"som_tab","som_tab1")
   })
-  observeEvent(input$data_som,{
-    req(input$som_tab)
-    re$df<-input$som_tab
 
-  })
   observeEvent(input$finesom,{
     tunesom$finesom<-input$finesom
   })
@@ -2173,26 +2166,13 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   observeEvent(input$som_model_delete,{
     attr(vals$saved_data[[input$data_som]],"som")[[input$som_models]]<-NULL
   })
-  observe({
-    req(!is.null(re$df))
-    if(length(attr(vals$saved_data[[input$data_som]],"som"))>0)
-      updateTabsetPanel(session,"som_tab",re$df)
-  })
+
   observeEvent(input$som_tab,{
     vals$cursomtab<-input$som_tab
   })
 
 
-  observeEvent(input$trainSOM, {
-    vals$bagmodel<-T
-    vals$cur_train<-"new som (unsaved)"
-    updateTabsetPanel(session, "som_tab", "som_tab2")
-    updateTabsetPanel(session, "som_tab", "train_tab2")
-    updateTabsetPanel(session, "som_res", "train_tab1")
-    # updateSelectInput(session,"som_models",                      choices=c("new som (unsaved)", names(attr(vals$saved_data[[input$data_som]],"som"))))
-    updateSelectInput(session,"som_models",
-                      selected="new som (unsaved)")
-  })
+
   observeEvent(input$resetsom, {
     tunesom$rlen=500
     tunesom$distmethod="BrayCurtis"
@@ -2213,98 +2193,109 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
   })
 
   observeEvent(input$trainSOM,{
+    if(is.null(attr(vals$saved_data[[input$data_som]],"som"))){
+      attr(vals$saved_data[[input$data_som]],"som")<-list()
+    }
     data = data.frame(getdata_som())
     data_o<-data.frame(vals$saved_data[[input$data_som]])
     test<-which(!rownames(data_o)%in%rownames(data))
-    withProgress(message = "Running som... the time taken will depend on the size of the data and the training.",
-                 min = 1,
-                 max = 1,
-                 {
-                   if(input$som_type=='Unsupervised')
-                   {
-                     if(is.na(input$seed)==F){set.seed(input$seed)}
-                     m<-try(supersom(
-                       list(X=as.matrix(data)),
-                       grid = kohonen::somgrid(
-                         input$xdim,
-                         input$ydim,
-                         topo = input$topo,
-                         toroidal = toroidal(),
-                         neighbourhood.fct=tunesom$neighbourhood.fct
-                       ),
-                       rlen = input$rlen,
-                       dist.fcts = input$distmethod,
-                       alpha = c(tunesom$a1, tunesom$a2),
-                       radius = c(tunesom$r1, tunesom$r2),
-                       mode = tunesom$mode,
-                       maxNA.fraction = tunesom$maxna
-                     ))
+    withProgress(
+      message = "Running som... the time taken will depend on the size of the data and the training.",
+      min = 1,
+      max = 1,
+      {
+        if(input$som_type=='Unsupervised')
+        {
+          if(is.na(input$seed)==F){set.seed(input$seed)}
+          m<-try(
+            supersom(
+              list(X=as.matrix(data)),
+              grid = kohonen::somgrid(
+                input$xdim,
+                input$ydim,
+                topo = input$topo,
+                toroidal = toroidal(),
+                neighbourhood.fct=tunesom$neighbourhood.fct
+              ),
+              rlen = input$rlen,
+              dist.fcts = input$distmethod,
+              alpha = c(tunesom$a1, tunesom$a2),
+              radius = c(tunesom$r1, tunesom$r2),
+              mode = tunesom$mode,
+              maxNA.fraction = tunesom$maxna
+            )
+          )
 
-                   } else {
-                     sup_test<-get_sup_som_test()
-                     if(is.na(input$seed)==F){set.seed(input$seed)}
-                     m<-try(xyf(
-                       X=as.matrix(data),
-                       Y=if(input$som_type2=="Numeric") {as.matrix(vals$saved_data[[input$data_somY]][rownames(data),])} else {
-                         get_supsom_list()
-                       },
-                       #whatmap = 1,
-                       grid = kohonen::somgrid(
-                         input$xdim,
-                         input$ydim,
-                         topo = input$topo,
-                         toroidal = toroidal(),
-                         neighbourhood.fct=tunesom$neighbourhood.fct
-                       ),
-                       rlen = input$rlen,
-                       dist.fcts = c(input$distmethod,
-                                     if(input$som_type2=="Numeric") {input$distmethod} else {'tanimoto'}),
-                       alpha = c(tunesom$a1, tunesom$a2),
-                       radius = c(tunesom$r1, tunesom$r2),
-                       mode = tunesom$mode,
-                       maxNA.fraction = tunesom$maxna
-                     ))
-                     attr(m,"sup_test")<-sup_test
-                     attr(m,"supervisor")<-input$data_somY
+        } else {
+          sup_test<-get_sup_som_test()
+          if(is.na(input$seed)==F){set.seed(input$seed)}
+          m<-try(xyf(
+            X=as.matrix(data),
+            Y=if(input$som_type2=="Numeric") {as.matrix(vals$saved_data[[input$data_somY]][rownames(data),])} else {
+              get_supsom_list()
+            },
+            #whatmap = 1,
+            grid = kohonen::somgrid(
+              input$xdim,
+              input$ydim,
+              topo = input$topo,
+              toroidal = toroidal(),
+              neighbourhood.fct=tunesom$neighbourhood.fct
+            ),
+            rlen = input$rlen,
+            dist.fcts = c(input$distmethod,
+                          if(input$som_type2=="Numeric") {input$distmethod} else {'tanimoto'}),
+            alpha = c(tunesom$a1, tunesom$a2),
+            radius = c(tunesom$r1, tunesom$r2),
+            mode = tunesom$mode,
+            maxNA.fraction = tunesom$maxna
+          ))
+          attr(m,"sup_test")<-sup_test
+          attr(m,"supervisor")<-input$data_somY
 
-                   }
+        }
+        if (class(m) != "kohonen")
+        {
+          validate(paste(m[[1]], "Please decrease your alpha (learning rate)"))
+        }
+        attr(m,'mode')<-input$mode
 
+        names(m$unit.classif)<-rownames(m$data[[1]])
 
+        attr(m,"test_partition")<-"None"
 
-
-
-
-                   #updateTabItems(session, "tabs", "training")
-                   #updateTabsetPanel(session, "som_tab", "results")
-                   #updateTabsetPanel(session, "som_tab", "results")
-                   if (class(m) != "kohonen")
-                   {
-                     validate(paste(m[[1]], "Please decrease your alpha (learning rate)"))
-                   }
-                   attr(m,'mode')<-input$mode
-
-                   names(m$unit.classif)<-rownames(m$data[[1]])
-
-                   attr(m,"test_partition")<-"None"
-
-                   attr(m,"Method")<-if(input$som_type=="Unsupervised"){"Unsupervised"} else{
-                     input$data_somY
-                   }
+        attr(m,"Method")<-if(input$som_type=="Unsupervised"){"Unsupervised"} else{
+          input$data_somY
+        }
 
 
-                   attr(m,"Datalist")<-input$data_som
+        attr(m,"Datalist")<-input$data_som
 
-                   attr(m,"som_type2")<-input$som_type2
-                   if(input$som_type=="Supervised"){
-                     if(input$som_type2=="Factors"){attr(m,"faclist")<-attr(get_supsom_list(),"faclist")}}
-                   attr(m,"coords")<-attr(data,"coords")
-                   vals$som_unsaved<-m
+        attr(m,"som_type2")<-input$som_type2
+        if(input$som_type=="Supervised"){
+          if(input$som_type2=="Factors"){attr(m,"faclist")<-attr(get_supsom_list(),"faclist")}}
+        attr(m,"coords")<-attr(data,"coords")
+        vals$som_unsaved<-m
 
-                   m
+        attr(vals$saved_data[[input$data_som]],"som")[["new som (unsaved)"]]<-m
+
+          m
 
 
-                 })
+      }
+    )
 
+  })
+
+
+
+  observeEvent( vals$som_unsaved, {
+    vals$cur_train<-"new som (unsaved)"
+    updateTabsetPanel(session, "som_tab", "som_tab2")
+    updateTabsetPanel(session, "som_tab", "train_tab2")
+    updateTabsetPanel(session, "som_res", "train_tab1")
+    # updateSelectInput(session,"som_models",                      choices=c("new som (unsaved)", names(attr(vals$saved_data[[input$data_som]],"som"))))
+   #updateSelectInput(session,"som_models",selected="new som (unsaved)")
   })
   observeEvent(input$resettopo, {
     output$somgridtopo<-renderUI({topocontrol()})})
@@ -2617,7 +2608,6 @@ module_server_som<-function (input,output,session,vals,df_colors,newcolhabs,df_s
     bmu<-temp$unit.classif
     names(bmu)<-rownames(temp$data[[1]])
     bmu<-as.factor(bmu)
-    vals$bagmodel<-FALSE
     if(input$hand_save=="create"){
       temp<-list(temp)
       names(temp)<-input$newdatalist

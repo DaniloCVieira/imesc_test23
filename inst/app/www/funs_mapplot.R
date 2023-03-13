@@ -319,6 +319,7 @@ plotshape<-function(shape){
 map_discrete_variable<-function(data,get,coords,base_shape=NULL,layer_shape=NULL,main="",size=.14,cex.main=15,cex.axes=13,cex.lab=15,cex.sub=14,cex.leg=11,cex.pt=7,subtitle="",leg="", factors=NULL,showcoords=F, cex.coords=NULL, col.coords="firebrick",col.palette='turbo',col.fac="firebrick",symbol=15, scalesize_size=T,scalesize_color=T, points=T, cex.fac=4, as_factor=F,bmu=F,key.height=1, colored_by_factor=NULL,showguides=F, limits=NULL,layer_col="gray",lighten=0.5,base_col="white",base_lighten=1,newcolhabs, extralayers=NULL,  data_depth=if(!is.null(extralayers)){3+(length(extralayers$layers)*2)} else{NULL},breaks_len=5,mybreaks=NULL,cexmin.pt=0,layer_shape_border="Grey",base_shape_border="gray", keyscale=12,  width_hint=0.15,cex_scabar=0.7, pie=F,facpizza=NULL
                                ){
 
+  req(nrow(data)>0)
 
 
   {
@@ -506,8 +507,7 @@ if(is.numeric(geopoint$pop)){
   if(is.null(colored_by_factor)){
     if(isTRUE(as_factor)){p<- p +   geom_point( data=geopoint, aes(x=x, y=y), pch=symbol, color=colhabs[as.factor(prev)]) }else{
       if(!any(geopoint$pop<0)){
-        p<-p+
-          scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
+        #p<-p+scale_radius(name=name.var, range=c(cexmin.pt,cex.pt),guide="none",breaks=mybreaks, limits =range(mybreaks))
       } else{
         p<-p+
           scale_radius(name=name.var,guide="none",breaks=mybreaks, limits =range(mybreaks))

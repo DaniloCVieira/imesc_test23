@@ -2,6 +2,9 @@
 # Launch the ShinyApp (Do not remove this comment)
 
 
+#args<-readRDS("args1.rds")
+#do.call(map_discrete_variable,args)
+#args$data
 
 
 list.of.packages <- c('remotes')
